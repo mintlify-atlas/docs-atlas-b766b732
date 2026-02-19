@@ -1,0 +1,250 @@
+{
+  "projectType": "framework",
+  "projectName": "mcp-use",
+  "projectDescription": "The fullstack MCP framework to build MCP Apps for ChatGPT/Claude and MCP Servers for AI Agents",
+  "theme": "almond",
+  "primaryColor": "#0C0C0C",
+  "lightColor": "#ffffff",
+  "darkColor": "#0C0C0C",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Overview",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/mcp-protocol",
+              "concepts/servers-vs-apps",
+              "concepts/tools-resources-prompts",
+              "concepts/architecture"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building-your-first-server",
+              "guides/building-mcp-apps",
+              "guides/connecting-to-servers",
+              "guides/creating-agents"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "TypeScript",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "typescript/installation",
+              "typescript/quickstart"
+            ]
+          },
+          {
+            "group": "MCP Server",
+            "pages": [
+              "typescript/server/overview",
+              "typescript/server/creating-server",
+              "typescript/server/tools",
+              "typescript/server/resources",
+              "typescript/server/prompts",
+              "typescript/server/widgets",
+              "typescript/server/oauth",
+              "typescript/server/notifications",
+              "typescript/server/sampling"
+            ]
+          },
+          {
+            "group": "MCP Client",
+            "pages": [
+              "typescript/client/overview",
+              "typescript/client/configuration",
+              "typescript/client/connecting",
+              "typescript/client/sessions"
+            ]
+          },
+          {
+            "group": "MCP Agent",
+            "pages": [
+              "typescript/agent/overview",
+              "typescript/agent/basic-usage",
+              "typescript/agent/streaming",
+              "typescript/agent/memory",
+              "typescript/agent/server-manager"
+            ]
+          },
+          {
+            "group": "MCP Apps",
+            "pages": [
+              "typescript/apps/overview",
+              "typescript/apps/creating-widgets",
+              "typescript/apps/react-hooks",
+              "typescript/apps/theming",
+              "typescript/apps/chatgpt-integration",
+              "typescript/apps/claude-integration"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "typescript/api/server",
+              "typescript/api/client",
+              "typescript/api/agent",
+              "typescript/api/response-helpers",
+              "typescript/api/oauth",
+              "typescript/api/react-hooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Python",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "python/installation",
+              "python/quickstart"
+            ]
+          },
+          {
+            "group": "MCP Server",
+            "pages": [
+              "python/server/overview",
+              "python/server/creating-server",
+              "python/server/tools",
+              "python/server/resources",
+              "python/server/prompts",
+              "python/server/transport"
+            ]
+          },
+          {
+            "group": "MCP Client",
+            "pages": [
+              "python/client/overview",
+              "python/client/configuration",
+              "python/client/connecting",
+              "python/client/sessions"
+            ]
+          },
+          {
+            "group": "MCP Agent",
+            "pages": [
+              "python/agent/overview",
+              "python/agent/basic-usage",
+              "python/agent/streaming",
+              "python/agent/memory",
+              "python/agent/server-manager"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "python/api/server",
+              "python/api/client",
+              "python/api/agent",
+              "python/api/connectors",
+              "python/api/adapters"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tools",
+        "groups": [
+          {
+            "group": "Inspector",
+            "pages": [
+              "tools/inspector/overview",
+              "tools/inspector/getting-started",
+              "tools/inspector/features",
+              "tools/inspector/cli",
+              "tools/inspector/self-hosting"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "tools/cli/overview",
+              "tools/cli/commands",
+              "tools/cli/hot-reload",
+              "tools/cli/deployment"
+            ]
+          },
+          {
+            "group": "Create App",
+            "pages": [
+              "tools/create-app/overview",
+              "tools/create-app/templates",
+              "tools/create-app/customization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Deployment Options",
+            "pages": [
+              "deployment/overview",
+              "deployment/manufact-cloud",
+              "deployment/self-hosted",
+              "deployment/docker"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "deployment/chatgpt",
+              "deployment/claude",
+              "deployment/custom-clients"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Build MCP Servers with tool, resource, and prompt support",
+    "Create MCP Apps with interactive React widgets for ChatGPT/Claude",
+    "Connect AI agents to multiple MCP servers",
+    "Built-in inspector for testing and debugging",
+    "OAuth authentication and authorization",
+    "Notifications and sampling support",
+    "Hot module reloading for development",
+    "TypeScript and Python SDK implementations",
+    "LangChain integration for agent building",
+    "Streamable HTTP and WebSocket transports"
+  ],
+  "publicApiSurface": [
+    "MCPServer - Server framework class",
+    "MCPClient - Client for connecting to servers",
+    "MCPAgent - Agent framework with LLM integration",
+    "server.tool() - Register tools",
+    "server.resource() - Register resources",
+    "server.prompt() - Register prompts",
+    "server.widget() - Register UI widgets",
+    "server.listen() - Start server with inspector",
+    "client.createAllSessions() - Initialize connections",
+    "agent.run() - Execute agent tasks",
+    "agent.stream() - Streaming responses",
+    "useMcp() - React hook for MCP integration",
+    "useWidget() - React hook for widget props",
+    "text(), widget(), resource() - Response helpers",
+    "oauthSupabaseProvider() - OAuth integration",
+    "FileSystemSessionStore - Session persistence",
+    "@mcp-use/cli - Development CLI",
+    "@mcp-use/inspector - Web-based debugger",
+    "create-mcp-use-app - Project scaffolding"
+  ]
+}
