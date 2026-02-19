@@ -1,0 +1,370 @@
+---
+title: 'CLI Overview'
+description: 'Build and development tool for creating MCP servers with integrated UI widgets'
+icon: 'hammer'
+---
+
+# mcp-use CLI
+
+The **mcp-use CLI** is a powerful build and development tool for creating MCP (Model Context Protocol) servers with integrated UI widgets. It enables developers to build MCP servers with custom React components that can be served alongside their MCP tools, providing rich visual interfaces for AI interactions.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Auto Inspector" icon="magnifying-glass">
+    Automatically opens the MCP Inspector when dev server starts
+  </Card>
+  <Card title="Hot Reload" icon="fire">
+    Development mode with automatic reloading for server code and widgets
+  </Card>
+  <Card title="Widget Builder" icon="paintbrush">
+    Compiles React components into standalone HTML pages
+  </Card>
+  <Card title="Production Ready" icon="rocket">
+    Optimized production builds with hashed assets
+  </Card>
+  <Card title="TypeScript First" icon="code">
+    Full TypeScript support with watch mode compilation
+  </Card>
+  <Card title="Cloud Deployment" icon="cloud">
+    One-command deployment to mcp-use cloud platform
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Tabs>
+  <Tab title="Global">
+    Install globally for use across projects:
+
+    ```bash
+    npm install -g @mcp-use/cli
+    ```
+
+    Then use directly:
+    ```bash
+    mcp-use dev
+    ```
+  </Tab>
+
+  <Tab title="Project">
+    Install as a dev dependency:
+
+    ```bash
+    npm install --save-dev @mcp-use/cli
+    ```
+
+    Use via package.json scripts:
+    ```json
+    {
+      "scripts": {
+        "dev": "mcp-use dev",
+        "build": "mcp-use build"
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="NPX">
+    No installation needed:
+
+    ```bash
+    npx @mcp-use/cli dev
+    ```
+
+    Perfect for trying out or CI/CD pipelines.
+  </Tab>
+</Tabs>
+
+## Core Commands
+
+The CLI provides five essential commands for the complete development lifecycle:
+
+### `dev` - Development Mode
+
+Start a development server with hot reload and auto-opening inspector:
+
+```bash
+mcp-use dev
+```
+
+**What happens:**
+1. TypeScript files compile in watch mode
+2. UI widgets build with hot reload
+3. Server runs with auto-restart on changes
+4. Inspector opens at `http://localhost:3000/inspector`
+5. MCP endpoint available at `http://localhost:3000/mcp`
+
+<Tip>
+  The dev server uses HMR (Hot Module Replacement) to update your server without restarting, preserving WebSocket connections.
+</Tip>
+
+### `build` - Production Build
+
+Build your MCP application for production:
+
+```bash
+mcp-use build
+```
+
+**What happens:**
+1. TypeScript compiles to JavaScript
+2. All `.tsx` files in `resources/` bundle as standalone HTML
+3. Assets are hashed for optimal caching
+4. Output is optimized and minified
+
+### `start` - Production Server
+
+Start the production server from built files:
+
+```bash
+mcp-use start
+```
+
+Runs the compiled server from the `dist/` directory.
+
+### `deploy` - Cloud Deployment
+
+Deploy your MCP server to the cloud:
+
+```bash
+mcp-use deploy
+```
+
+One-command deployment to the mcp-use cloud platform with:
+- Automatic builds
+- SSL certificates
+- Custom domains
+- Environment variables
+
+### `login/logout/whoami` - Authentication
+
+Manage authentication for cloud deployments:
+
+```bash
+mcp-use login    # Authenticate with mcp-use cloud
+mcp-use whoami   # Check current user
+mcp-use logout   # Sign out
+```
+
+## Quick Start
+
+Get started in 3 steps:
+
+<Steps>
+  <Step title="Create Project">
+    Use `create-mcp-use-app` to scaffold a new project:
+
+    ```bash
+    npx create-mcp-use-app my-mcp-server
+    cd my-mcp-server
+    ```
+  </Step>
+
+  <Step title="Start Development">
+    Launch the dev server:
+
+    ```bash
+    npm run dev
+    ```
+
+    The inspector opens automatically in your browser.
+  </Step>
+
+  <Step title="Build for Production">
+    Create an optimized build:
+
+    ```bash
+    npm run build
+    npm run start
+    ```
+
+    Your MCP server is production-ready!
+  </Step>
+</Steps>
+
+## Project Structure
+
+The CLI expects this project structure:
+
+```
+my-mcp-app/
+├── package.json
+├── tsconfig.json
+├── src/
+│   └── index.ts           # MCP server entry point
+├── resources/             # UI widgets (React components)
+│   ├── weather.tsx        # Single file widget
+│   └── dashboard/         # Multi-file widget
+│       ├── widget.tsx
+│       └── styles.css
+├── public/               # Static assets
+│   ├── favicon.ico
+│   └── icon.svg
+└── dist/                 # Build output
+    ├── index.js          # Compiled server
+    └── resources/
+        └── mcp-use/
+            └── widgets/
+                ├── weather/
+                │   ├── index.html
+                │   └── assets/
+                │       └── index-[hash].js
+                └── dashboard/
+                    ├── index.html
+                    └── assets/
+                        └── index-[hash].js
+```
+
+## Widget Building
+
+The CLI automatically processes React widgets:
+
+<Steps>
+  <Step title="Create Widget">
+    Create a `.tsx` file in `resources/`:
+
+    ```tsx resources/hello.tsx
+    import React from "react";
+    import { useMcp } from "mcp-use/react";
+
+    export default function Hello() {
+      return <div>Hello from MCP Widget!</div>;
+    }
+    ```
+  </Step>
+
+  <Step title="Build Automatically">
+    The CLI detects and builds all widgets:
+
+    ```bash
+    mcp-use dev   # Auto-builds with hot reload
+    mcp-use build # Production build
+    ```
+  </Step>
+
+  <Step title="Access Widget">
+    Widget available at:
+    ```
+    http://localhost:3000/widgets/hello
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  Widgets can include CSS, use Tailwind, import assets, and interact with MCP tools via the `useMcp` hook.
+</Info>
+
+## TypeScript Support
+
+The CLI provides full TypeScript support:
+
+- **Watch mode** in development
+- **Type checking** before builds
+- **Declaration files** generated automatically
+- **Source maps** for debugging
+
+Configure via `tsconfig.json`:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*", "resources/**/*"]
+}
+```
+
+## Development Workflow
+
+Optimized workflow for rapid development:
+
+<Tabs>
+  <Tab title="Standard">
+    ```bash
+    # Start development
+    mcp-use dev
+
+    # Make changes to:
+    # - src/index.ts (server restarts)
+    # - resources/*.tsx (widgets rebuild)
+
+    # Test in inspector (auto-opens)
+    # Inspector maintains connections during HMR
+    ```
+  </Tab>
+
+  <Tab title="Custom Port">
+    ```bash
+    # Use different port
+    mcp-use dev --port 8080
+
+    # Or via environment variable
+    PORT=8080 mcp-use dev
+    ```
+  </Tab>
+
+  <Tab title="No Auto-Open">
+    ```bash
+    # Disable auto-opening inspector
+    mcp-use dev --no-open
+
+    # Manually visit:
+    # http://localhost:3000/inspector
+    ```
+  </Tab>
+</Tabs>
+
+## Production Deployment
+
+Multiple deployment options:
+
+<CardGroup cols={2}>
+  <Card title="mcp-use Cloud" icon="cloud" href="/tools/cli/deployment">
+    One-command deployment with automatic scaling
+  </Card>
+  <Card title="Docker" icon="docker">
+    Build Docker images for any platform
+  </Card>
+  <Card title="Node.js" icon="node-js">
+    Run directly with Node.js or PM2
+  </Card>
+  <Card title="Serverless" icon="bolt">
+    Deploy to serverless platforms
+  </Card>
+</CardGroup>
+
+## Environment Variables
+
+Key environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `PORT` | Server port | `3000` |
+| `NODE_ENV` | Environment mode | `development` |
+| `MCP_URL` | Base URL for widgets | `http://localhost:3000` |
+| `MCP_API_URL` | Cloud API URL | `https://cloud.mcp-use.com/api/v1` |
+| `MCP_WEB_URL` | Cloud web URL | `https://mcp-use.com` |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/tools/cli/commands">
+    Complete command reference with all options
+  </Card>
+  <Card title="Hot Reload" icon="fire" href="/tools/cli/hot-reload">
+    Learn how HMR works and troubleshooting
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/tools/cli/deployment">
+    Deploy to production with cloud or Docker
+  </Card>
+  <Card title="Create App" icon="plus" href="/tools/create-app/overview">
+    Scaffold new projects with templates
+  </Card>
+</CardGroup>

@@ -1,0 +1,665 @@
+---
+title: "ChatGPT Integration"
+description: "Deploy MCP widgets to ChatGPT using the Apps SDK"
+---
+
+# ChatGPT Integration
+
+Learn how to deploy mcp-use widgets to ChatGPT using OpenAI's Apps SDK protocol.
+
+## Overview
+
+ChatGPT renders MCP widgets using the **Apps SDK** protocol:
+
+- Widgets are served as `text/html+skybridge` resources
+- Metadata is passed via `_meta["openai/*"]` fields
+- Runtime API available via `window.openai` global
+- Full theming and state management support
+
+## Widget Types
+
+Choose between two widget types:
+
+### Apps SDK Widgets (ChatGPT-only)
+
+```typescript
+server.uiResource({
+  type: "appsSdk",
+  name: "my-widget",
+  htmlTemplate: `<!DOCTYPE html>...`,
+  appsSdkMetadata: {
+    "openai/widgetCSP": {
+      connect_domains: ["https://api.example.com"]
+    },
+    "openai/widgetPrefersBorder": true,
+    "openai/widgetDescription": "Widget description"
+  }
+})
+```
+
+### MCP Apps Widgets (Universal)
+
+```typescript
+server.uiResource({
+  type: "mcpApps",  // Works with ChatGPT AND Claude
+  name: "my-widget",
+  htmlTemplate: `<!DOCTYPE html>...`,
+  metadata: {
+    csp: {
+      connectDomains: ["https://api.example.com"],
+      resourceDomains: ["https://cdn.example.com"]
+    },
+    prefersBorder: true,
+    widgetDescription: "Widget description for ChatGPT"
+  }
+})
+```
+
+<Note>
+  Use `mcpApps` for new widgets to support both ChatGPT and Claude Desktop from a single codebase.
+</Note>
+
+## Setup
+
+### 1. Create MCP Server
+
+Create a new mcp-use server:
+
+```bash
+npx create-mcp-use-app my-chatgpt-server
+cd my-chatgpt-server
+npm install
+```
+
+### 2. Create Widget
+
+Create a widget in `resources/greeting/widget.tsx`:
+
+```tsx resources/greeting/widget.tsx
+import { McpUseProvider, useWidget } from 'mcp-use/react'
+import { z } from 'zod'
+
+const propSchema = z.object({
+  name: z.string(),
+  message: z.string()
+})
+
+export const widgetMetadata = {
+  description: 'Display a personalized greeting',
+  props: propSchema
+}
+
+type Props = z.infer<typeof propSchema>
+
+const GreetingWidget = () => {
+  const { props } = useWidget<Props>()
+
+  return (
+    <McpUseProvider>
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-3xl p-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Hello, {props.name}!
+        </h1>
+        <p className="text-lg text-gray-600 dark:text-gray-400">
+          {props.message}
+        </p>
+      </div>
+    </McpUseProvider>
+  )
+}
+
+export default GreetingWidget
+```
+
+### 3. Run Development Server
+
+```bash
+npm run dev
+```
+
+Your server is now running at `http://localhost:3000`.
+
+### 4. Expose to Internet
+
+ChatGPT needs a publicly accessible URL. Use ngrok, localhost.run, or deploy to a hosting service:
+
+```bash
+# Using ngrok
+ngrok http 3000
+```
+
+You'll get a URL like: `https://abc123.ngrok.io`
+
+### 5. Add to ChatGPT
+
+1. Open ChatGPT
+2. Click your profile → **Settings** → **Beta features**
+3. Enable **MCP servers**
+4. Add your server URL: `https://abc123.ngrok.io/mcp`
+5. Test: "Show me a greeting for John"
+
+## Content Security Policy (CSP)
+
+ChatGPT enforces strict CSP for widgets. Configure allowed domains:
+
+### Basic CSP
+
+```typescript
+server.uiResource({
+  type: "mcpApps",
+  name: "weather",
+  htmlTemplate: `...`,
+  metadata: {
+    csp: {
+      connectDomains: ["https://api.weather.com"],  // fetch() allowed
+      resourceDomains: ["https://cdn.weather.com"]   // <img>, <script> allowed
+    }
+  }
+})
+```
+
+### Multiple Domains
+
+```typescript
+metadata: {
+  csp: {
+    connectDomains: [
+      "https://api.example.com",
+      "https://api.backup.com"
+    ],
+    resourceDomains: [
+      "https://cdn.example.com",
+      "https://images.example.com"
+    ]
+  }
+}
+```
+
+### Wildcard Subdomains
+
+```typescript
+metadata: {
+  csp: {
+    connectDomains: ["https://*.example.com"],  // Allows any subdomain
+    resourceDomains: ["https://*.cdn.com"]
+  }
+}
+```
+
+<Warning>
+  Widgets will fail to load resources from domains not listed in CSP. Always include CDNs and API endpoints.
+</Warning>
+
+## Platform API
+
+ChatGPT provides the `window.openai` API for widget interactions. mcp-use abstracts this via `useWidget`:
+
+### Call Tools
+
+```tsx
+const MyWidget = () => {
+  const { callTool } = useWidget()
+
+  const handleRefresh = async () => {
+    const result = await callTool('get-data', { id: 123 })
+    console.log(result)
+  }
+
+  return <button onClick={handleRefresh}>Refresh</button>
+}
+```
+
+### Send Follow-up Messages
+
+```tsx
+const SearchWidget = () => {
+  const { props, sendFollowUpMessage } = useWidget<SearchProps>()
+
+  const handleLearnMore = (query: string) => {
+    sendFollowUpMessage(`Tell me more about ${query}`)
+  }
+
+  return (
+    <div>
+      {props.results.map(result => (
+        <button key={result.id} onClick={() => handleLearnMore(result.title)}>
+          Learn More
+        </button>
+      ))}
+    </div>
+  )
+}
+```
+
+### Open External Links
+
+```tsx
+const ProductWidget = () => {
+  const { props, openExternal } = useWidget<ProductProps>()
+
+  return (
+    <button onClick={() => openExternal(props.productUrl)}>
+      View Product
+    </button>
+  )
+}
+```
+
+### Manage Widget State
+
+```tsx
+const FavoritesWidget = () => {
+  const { state, setState } = useWidget<any, any, any, { items: string[] }>()
+
+  const addItem = async (item: string) => {
+    await setState(prev => ({
+      items: [...(prev?.items || []), item]
+    }))
+  }
+
+  return (
+    <div>
+      <p>Favorites: {state?.items?.join(', ')}</p>
+      <button onClick={() => addItem('New Item')}>Add</button>
+    </div>
+  )
+}
+```
+
+<Note>
+  Widget state persists across conversation turns in ChatGPT.
+</Note>
+
+### Request Display Mode
+
+```tsx
+const ImageGallery = () => {
+  const { displayMode, requestDisplayMode } = useWidget()
+
+  const handleFullscreen = async () => {
+    await requestDisplayMode('fullscreen')
+  }
+
+  return (
+    <div>
+      <p>Mode: {displayMode}</p>
+      <button onClick={handleFullscreen}>Fullscreen</button>
+    </div>
+  )
+}
+```
+
+## ChatGPT-Specific Features
+
+### Widget Description
+
+Provide a description shown to users:
+
+```typescript
+metadata: {
+  widgetDescription: "Display weather forecast with interactive 5-day chart"
+}
+```
+
+### Border Preference
+
+Request a border around your widget:
+
+```typescript
+metadata: {
+  prefersBorder: true  // ChatGPT may add a border
+}
+```
+
+### Using Apps SDK UI
+
+For native ChatGPT styling, use OpenAI's UI components:
+
+```bash
+npm install @openai/apps-sdk-ui
+```
+
+```tsx
+import { AppsSDKUIProvider } from '@openai/apps-sdk-ui/components/AppsSDKUIProvider'
+import { McpUseProvider, useWidget } from 'mcp-use/react'
+
+const NativeWidget = () => {
+  const { props } = useWidget<Props>()
+
+  return (
+    <McpUseProvider>
+      <AppsSDKUIProvider>
+        <div className="bg-surface-elevated rounded-3xl p-8">
+          <h5 className="text-secondary mb-1">Product</h5>
+          <h2 className="heading-xl mb-3">{props.name}</h2>
+          <p className="text-md text-secondary">{props.description}</p>
+        </div>
+      </AppsSDKUIProvider>
+    </McpUseProvider>
+  )
+}
+```
+
+## Complete Example
+
+Here's a full weather widget for ChatGPT:
+
+```tsx resources/weather/widget.tsx
+import { McpUseProvider, useWidget } from 'mcp-use/react'
+import { z } from 'zod'
+import './styles.css'
+
+const propSchema = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  conditions: z.string(),
+  forecast: z.array(z.object({
+    day: z.string(),
+    high: z.number(),
+    low: z.number(),
+    icon: z.string()
+  }))
+})
+
+export const widgetMetadata = {
+  description: 'Display weather with 5-day forecast',
+  props: propSchema
+}
+
+type WeatherProps = z.infer<typeof propSchema>
+
+const WeatherWidget = () => {
+  const { props, callTool, sendFollowUpMessage, isPending } = useWidget<WeatherProps>()
+
+  const handleRefresh = async () => {
+    await callTool('get-weather', { city: props.city })
+  }
+
+  const handleAskMore = () => {
+    sendFollowUpMessage(`Tell me more about the weather in ${props.city}`)
+  }
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-3xl p-8">
+      {/* Current Weather */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {props.city}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 capitalize">
+            {props.conditions}
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-5xl font-bold text-blue-600 dark:text-blue-400">
+            {props.temperature}°
+          </div>
+          <div className="text-sm text-gray-500">Celsius</div>
+        </div>
+      </div>
+
+      {/* 5-Day Forecast */}
+      <div className="grid grid-cols-5 gap-2 mb-6">
+        {props.forecast.map(day => (
+          <div
+            key={day.day}
+            className="text-center bg-white/50 dark:bg-black/20 rounded-xl p-3"
+          >
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              {day.day}
+            </div>
+            <div className="text-2xl mb-1">{day.icon}</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">
+              {day.high}°
+            </div>
+            <div className="text-xs text-gray-500">{day.low}°</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleRefresh}
+          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+        >
+          Refresh
+        </button>
+        <button
+          onClick={handleAskMore}
+          className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-lg transition-colors"
+        >
+          Ask More
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const Widget = () => (
+  <McpUseProvider>
+    <WeatherWidget />
+  </McpUseProvider>
+)
+
+export default Widget
+```
+
+Server configuration:
+
+```typescript index.ts
+import { MCPServer, widget } from 'mcp-use/server'
+import { z } from 'zod'
+
+const server = new MCPServer({
+  name: 'weather-server',
+  version: '1.0.0'
+})
+
+server.tool({
+  name: 'get-weather',
+  description: 'Get weather forecast for a city',
+  schema: z.object({
+    city: z.string()
+  }),
+  widget: {
+    name: 'weather',
+    invoking: 'Fetching weather data...',
+    invoked: 'Weather loaded'
+  }
+}, async ({ city }) => {
+  const data = await fetchWeather(city)  // Your API call
+
+  return widget({
+    props: {
+      city,
+      temperature: data.current.temp,
+      conditions: data.current.conditions,
+      forecast: data.forecast
+    },
+    message: `Weather forecast for ${city}`
+  })
+})
+
+await server.listen()
+```
+
+Widget metadata for CSP:
+
+```typescript
+server.uiResource({
+  type: 'mcpApps',
+  name: 'weather',
+  metadata: {
+    csp: {
+      connectDomains: ['https://api.weather.com'],
+      resourceDomains: ['https://cdn.weather.com']
+    },
+    prefersBorder: true,
+    widgetDescription: 'Interactive weather widget with 5-day forecast'
+  }
+})
+```
+
+## Deployment
+
+### Development
+
+For testing:
+
+```bash
+npm run dev
+ngrok http 3000
+# Add https://xyz.ngrok.io/mcp to ChatGPT
+```
+
+### Production
+
+Deploy to a hosting service:
+
+```bash
+# Build
+npm run build
+
+# Deploy to your platform
+vercel deploy
+# or
+fly deploy
+# or
+docker build -t my-server .
+```
+
+See [Deployment](/deployment/overview) for detailed guides.
+
+## Debugging
+
+### Enable Debug Mode
+
+```tsx
+<McpUseProvider debugger>
+  <MyWidget />
+</McpUseProvider>
+```
+
+This shows:
+- Widget props
+- Tool input/output
+- Platform API calls
+- State changes
+
+### View Console Logs
+
+1. Right-click widget in ChatGPT
+2. Select **Inspect**
+3. Open **Console** tab
+4. View logs from your widget
+
+### Test Locally
+
+Use the mcp-use inspector:
+
+```bash
+mcp-use inspect
+```
+
+Navigate to `http://localhost:5173/inspector` and test your tools.
+
+## Best Practices
+
+### 1. Always Handle Loading
+
+```tsx
+const { isPending, props } = useWidget<Props>()
+
+if (isPending) {
+  return <LoadingSpinner />
+}
+```
+
+### 2. Configure CSP Correctly
+
+Include all external domains:
+
+```typescript
+metadata: {
+  csp: {
+    connectDomains: [
+      'https://api.example.com',
+      'https://cdn.example.com'
+    ]
+  }
+}
+```
+
+### 3. Use Semantic Actions
+
+Label buttons clearly:
+
+```tsx
+<button onClick={handleRefresh}>Refresh Data</button>
+<button onClick={handleLearnMore}>Learn More</button>
+```
+
+### 4. Persist Important State
+
+Use `setState` for data that should survive turns:
+
+```tsx
+const { state, setState } = useWidget()
+
+await setState({ favorites: [...state.favorites, newItem] })
+```
+
+### 5. Test in ChatGPT Early
+
+Test your widget in the actual environment early in development.
+
+## Troubleshooting
+
+### Widget Not Loading
+
+- Check server is accessible from internet
+- Verify MCP URL is correct: `https://your-domain.com/mcp`
+- Check server logs for errors
+- Test with `curl https://your-domain.com/mcp`
+
+### CSP Errors
+
+- Open browser console in widget
+- Look for "Content Security Policy" errors
+- Add blocked domains to `metadata.csp`
+
+### State Not Persisting
+
+- Ensure you're calling `setState` (not `useState`)
+- Check for errors in console
+- Verify you're returning from `setState`
+
+### Styling Issues
+
+- Check dark mode classes are correct
+- Verify Tailwind CSS is configured
+- Test in both light and dark modes
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Claude Integration" icon="message-bot" href="/typescript/apps/claude-integration">
+    Use widgets in Claude Desktop
+  </Card>
+  <Card title="Server Widgets" icon="server" href="/typescript/server/widgets">
+    Server-side widget configuration
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/chatgpt">
+    Deploy to production
+  </Card>
+</CardGroup>

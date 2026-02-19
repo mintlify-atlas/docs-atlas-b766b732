@@ -1,0 +1,352 @@
+---
+title: "Server Tools"
+description: "Define tools that AI agents can call"
+icon: "wrench"
+---
+
+## What are Tools?
+
+Tools are functions that AI agents can invoke to perform actions, retrieve data, or interact with external systems. In mcp-use, tools are defined using the `@server.tool()` decorator.
+
+## Basic Tool Definition
+
+```python
+from mcp_use import MCPServer
+
+server = MCPServer(name="my-server")
+
+@server.tool()
+def greet(name: str) -> str:
+    """Greet a user by name"""
+    return f"Hello, {name}!"
+```
+
+## Tool Parameters
+
+### Using Type Annotations
+
+Define tool parameters with type hints:
+
+```python
+from typing import Annotated
+from pydantic import Field
+
+@server.tool()
+def create_user(
+    username: Annotated[str, Field(description="Username for the new user")],
+    email: Annotated[str, Field(description="Email address")],
+    age: Annotated[int, Field(description="User age", ge=0, le=120)]
+) -> dict:
+    """Create a new user"""
+    return {
+        "id": 1,
+        "username": username,
+        "email": email,
+        "age": age
+    }
+```
+
+### Tool Decorator Options
+
+<ParamField path="name" type="str">
+  Tool name (defaults to function name)
+</ParamField>
+
+<ParamField path="title" type="str">
+  Human-readable title for the tool
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description of what the tool does
+</ParamField>
+
+<ParamField path="annotations" type="ToolAnnotations">
+  MCP tool annotations (hints about tool behavior)
+</ParamField>
+
+<ParamField path="structured_output" type="bool" default="False">
+  Whether the tool returns structured data
+</ParamField>
+
+## Complete Tool Example
+
+```python
+from mcp.types import ToolAnnotations
+from typing import Annotated
+from pydantic import Field
+
+@server.tool(
+    name="search_database",
+    title="Database Search",
+    description="Search the database for records",
+    annotations=ToolAnnotations(
+        title="Database Search",
+        readOnlyHint=True,  # Tool doesn't modify data
+        destructiveHint=False,  # Tool doesn't delete data
+        openWorldHint=False,  # Results are deterministic
+        idempotentHint=True  # Same input = same output
+    ),
+    structured_output=True
+)
+async def search_database(
+    query: Annotated[str, Field(description="Search query")],
+    limit: Annotated[int, Field(description="Max results", default=10, le=100)]
+) -> dict:
+    """Search the database and return matching records"""
+    # Your search logic here
+    results = [{"id": 1, "name": "Example"}]
+    return {
+        "query": query,
+        "count": len(results),
+        "results": results
+    }
+```
+
+## Async Tools
+
+Use async functions for I/O-bound operations:
+
+```python
+import asyncio
+import httpx
+
+@server.tool()
+async def fetch_data(url: str) -> str:
+    """Fetch data from a URL"""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.text
+```
+
+## Error Handling
+
+Raise exceptions to return errors to the agent:
+
+```python
+@server.tool()
+async def divide(a: float, b: float) -> float:
+    """Divide two numbers"""
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        raise TypeError("Arguments must be numbers")
+    return a / b
+```
+
+## Accessing Context
+
+Access request context in tools:
+
+```python
+from mcp.server.fastmcp import Context
+
+@server.tool()
+async def get_user_info(context: Context) -> dict:
+    """Get information about the current session"""
+    session = context.request_context.session
+    return {
+        "session_id": getattr(session, "session_id", "unknown"),
+        "client_info": context.fastmcp.client_info.dict()
+    }
+```
+
+## Tool Annotations
+
+Use `ToolAnnotations` to provide hints about tool behavior:
+
+```python
+from mcp.types import ToolAnnotations
+
+@server.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,  # Tool only reads data
+        destructiveHint=False,  # Tool doesn't delete data
+        openWorldHint=False,  # Results are deterministic
+        idempotentHint=True  # Multiple calls with same input = same result
+    )
+)
+def get_config() -> dict:
+    """Get server configuration"""
+    return {"version": "1.0.0", "env": "production"}
+```
+
+### Annotation Types
+
+<ResponseField name="readOnlyHint" type="bool">
+  Tool only reads data, doesn't modify state
+</ResponseField>
+
+<ResponseField name="destructiveHint" type="bool">
+  Tool deletes or irreversibly modifies data
+</ResponseField>
+
+<ResponseField name="openWorldHint" type="bool">
+  Tool may return different results over time (e.g., web search)
+</ResponseField>
+
+<ResponseField name="idempotentHint" type="bool">
+  Calling multiple times with same input produces same result
+</ResponseField>
+
+## Structured Output
+
+Return complex structured data:
+
+```python
+from pydantic import BaseModel
+from typing import List
+
+class User(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class UserListResponse(BaseModel):
+    total: int
+    users: List[User]
+
+@server.tool(structured_output=True)
+async def list_users(limit: int = 10) -> dict:
+    """List all users"""
+    users = [
+        {"id": 1, "name": "Alice", "email": "alice@example.com"},
+        {"id": 2, "name": "Bob", "email": "bob@example.com"}
+    ]
+    return {
+        "total": len(users),
+        "users": users[:limit]
+    }
+```
+
+## Tool Documentation
+
+Provide comprehensive documentation:
+
+```python
+@server.tool(
+    name="process_payment",
+    description="Process a payment transaction"
+)
+async def process_payment(
+    amount: Annotated[float, Field(description="Payment amount in USD", gt=0)],
+    currency: Annotated[str, Field(description="Currency code (USD, EUR, GBP)")],
+    customer_id: Annotated[str, Field(description="Unique customer identifier")]
+) -> dict:
+    """
+    Process a payment transaction.
+    
+    This tool charges the customer's default payment method and creates
+    a transaction record. The payment is processed asynchronously.
+    
+    Args:
+        amount: Payment amount (must be positive)
+        currency: Three-letter currency code
+        customer_id: Customer's unique identifier
+    
+    Returns:
+        Transaction details including transaction_id and status
+    
+    Raises:
+        ValueError: If amount is negative or currency is invalid
+        RuntimeError: If payment processing fails
+    """
+    # Process payment logic
+    return {
+        "transaction_id": "txn_123",
+        "amount": amount,
+        "currency": currency,
+        "status": "pending"
+    }
+```
+
+## Tool Testing
+
+Test tools using the inspector or client:
+
+```python test_tools.py
+import asyncio
+from mcp_use import MCPClient
+
+async def test_tool():
+    config = {
+        "mcpServers": {
+            "local": {"url": "http://localhost:8000/mcp"}
+        }
+    }
+    
+    client = MCPClient(config=config)
+    await client.create_all_sessions()
+    
+    session = client.get_session("local")
+    
+    # Test the tool
+    result = await session.call_tool(
+        "process_payment",
+        {
+            "amount": 99.99,
+            "currency": "USD",
+            "customer_id": "cust_123"
+        }
+    )
+    
+    print(result.content[0].text)
+    await client.close_all_sessions()
+
+asyncio.run(test_tool())
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Descriptive Names">
+    Choose clear, action-oriented names for tools:
+    - ✅ `create_user`, `send_email`, `fetch_weather`
+    - ❌ `do_thing`, `process`, `handle`
+  </Accordion>
+
+  <Accordion title="Provide Detailed Descriptions">
+    Help the AI understand what the tool does and when to use it:
+    ```python
+    @server.tool(
+        description="Send an email to one or more recipients with optional attachments"
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Validate Inputs">
+    Use Pydantic Field constraints to validate inputs:
+    ```python
+    age: Annotated[int, Field(ge=0, le=120)]
+    email: Annotated[str, Field(pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')]
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Errors Gracefully">
+    Raise descriptive exceptions that help debug issues:
+    ```python
+    if not user_exists(customer_id):
+        raise ValueError(f"Customer {customer_id} not found")
+    ```
+  </Accordion>
+
+  <Accordion title="Use Async for I/O">
+    Use async functions for network requests, file I/O, or database queries:
+    ```python
+    @server.tool()
+    async def fetch_data(url: str) -> str:
+        async with httpx.AsyncClient() as client:
+            return await client.get(url)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Resources" icon="database" href="/python/server/resources">
+    Learn about exposing data as resources
+  </Card>
+  <Card title="Prompts" icon="message" href="/python/server/prompts">
+    Create reusable prompt templates
+  </Card>
+</CardGroup>

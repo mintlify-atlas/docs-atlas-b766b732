@@ -1,0 +1,467 @@
+---
+title: 'Basic Agent Usage'
+description: 'Core agent operations and the run() method'
+icon: 'play'
+---
+
+# Basic Agent Usage
+
+Learn the fundamentals of creating and running MCPAgent instances, from simple queries to structured outputs.
+
+## Creating Your First Agent
+
+The simplest way to create an agent:
+
+```typescript
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    }
+  }
+});
+```
+
+<Note>
+Set your `OPENAI_API_KEY` environment variable before running.
+</Note>
+
+## Running Queries
+
+### Basic Run
+
+Use `run()` to execute a query and get the final result:
+
+```typescript
+const result = await agent.run(
+  'List the top 5 files in the current directory'
+);
+
+console.log(result);
+// Output: "Here are the top 5 files: 1. package.json, 2. tsconfig.json..."
+```
+
+### With Options Object
+
+Pass configuration as an object:
+
+```typescript
+const result = await agent.run({
+  prompt: 'List the files',
+  maxSteps: 15,              // Override default maxSteps
+  manageConnector: true,     // Auto-initialize and cleanup
+});
+```
+
+### With Abort Signal
+
+Implement timeouts:
+
+```typescript
+const controller = new AbortController();
+
+// Set 30 second timeout
+setTimeout(() => controller.abort(), 30000);
+
+try {
+  const result = await agent.run({
+    prompt: 'Complex long-running task',
+    signal: controller.signal
+  });
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.error('Query timed out after 30 seconds');
+  }
+}
+```
+
+Or use `AbortSignal.timeout()`:
+
+```typescript
+const result = await agent.run({
+  prompt: 'Task',
+  signal: AbortSignal.timeout(30000) // 30 seconds
+});
+```
+
+## Structured Output
+
+Get typed responses with Zod schemas:
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.object({
+  files: z.array(z.string()),
+  totalSize: z.number(),
+  largestFile: z.string()
+});
+
+const result = await agent.run({
+  prompt: 'Analyze the files in this directory',
+  schema
+});
+
+// result is fully typed!
+console.log(result.files);        // string[]
+console.log(result.totalSize);    // number
+console.log(result.largestFile);  // string
+```
+
+### Complex Schemas
+
+```typescript
+const analysisSchema = z.object({
+  summary: z.string(),
+  findings: z.array(z.object({
+    type: z.enum(['info', 'warning', 'error']),
+    message: z.string(),
+    file: z.string().optional()
+  })),
+  recommendations: z.array(z.string()),
+  metadata: z.object({
+    filesAnalyzed: z.number(),
+    timeSpent: z.number()
+  })
+});
+
+const analysis = await agent.run({
+  prompt: 'Analyze the codebase for issues',
+  schema: analysisSchema,
+  maxSteps: 20
+});
+
+// Fully typed result
+analysis.findings.forEach(finding => {
+  console.log(`[${finding.type}] ${finding.message}`);
+});
+```
+
+## Configuration Options
+
+### LLM Configuration
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  llmConfig: {
+    temperature: 0.3,      // More deterministic
+    maxTokens: 1000,       // Limit response length
+    topP: 0.9,
+    frequencyPenalty: 0.5
+  },
+  mcpServers: {...}
+});
+```
+
+### Max Steps
+
+Control how many reasoning iterations the agent can take:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  maxSteps: 10  // Default is 5
+});
+
+// Or override per query
+const result = await agent.run({
+  prompt: 'Complex multi-step task',
+  maxSteps: 20
+});
+```
+
+### System Prompts
+
+Customize the agent's behavior:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  systemPrompt: `You are a helpful coding assistant.
+    Always explain your reasoning.
+    Write clean, well-documented code.`
+});
+```
+
+Add additional instructions:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  systemPrompt: 'You are a helpful assistant.',
+  additionalInstructions: `Current project: mcp-use library
+    Focus on TypeScript best practices.`
+});
+```
+
+## Multi-Provider Support
+
+Switch between LLM providers:
+
+```typescript
+// OpenAI
+const openaiAgent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...}
+});
+
+// Anthropic
+const anthropicAgent = new MCPAgent({
+  llm: 'anthropic/claude-3-5-sonnet-20241022',
+  mcpServers: {...}
+});
+
+// Google
+const googleAgent = new MCPAgent({
+  llm: 'google/gemini-pro',
+  mcpServers: {...}
+});
+
+// Groq
+const groqAgent = new MCPAgent({
+  llm: 'groq/llama-3.1-70b-versatile',
+  mcpServers: {...}
+});
+```
+
+Set API keys via environment:
+
+```bash
+export OPENAI_API_KEY=your-key
+export ANTHROPIC_API_KEY=your-key
+export GOOGLE_API_KEY=your-key
+export GROQ_API_KEY=your-key
+```
+
+Or via config:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  llmConfig: {
+    apiKey: 'your-api-key'
+  },
+  mcpServers: {...}
+});
+```
+
+## Server Configuration
+
+### Local Servers (Stdio)
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+      env: { LOG_LEVEL: 'debug' }
+    }
+  }
+});
+```
+
+### Remote Servers (HTTP)
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    remote: {
+      url: 'https://api.example.com/mcp',
+      headers: {
+        'Authorization': 'Bearer token'
+      }
+    }
+  }
+});
+```
+
+### Multiple Servers
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '.']
+    },
+    github: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN }
+    }
+  }
+});
+```
+
+## Tool Management
+
+### Disallow Tools
+
+Prevent the agent from using specific tools:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  disallowedTools: ['delete_file', 'execute_command']
+});
+```
+
+### Add Custom Tools
+
+Integrate LangChain tools:
+
+```typescript
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
+
+const customTool = new DynamicStructuredTool({
+  name: 'calculate_tax',
+  description: 'Calculate tax for a given amount',
+  schema: z.object({
+    amount: z.number(),
+    rate: z.number()
+  }),
+  func: async ({ amount, rate }) => {
+    return (amount * rate).toString();
+  }
+});
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  additionalTools: [customTool]
+});
+```
+
+## Complete Example
+
+```typescript examples/agent/basic/complete_example.ts
+import { MCPAgent } from 'mcp-use/agent';
+import { z } from 'zod';
+
+async function main() {
+  // Create agent
+  const agent = new MCPAgent({
+    llm: 'openai/gpt-4o',
+    llmConfig: {
+      temperature: 0.3,
+      maxTokens: 2000
+    },
+    mcpServers: {
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+      }
+    },
+    systemPrompt: 'You are a helpful file system assistant.',
+    maxSteps: 15,
+    verbose: true
+  });
+
+  try {
+    // Simple query
+    console.log('Query 1: Simple');
+    const result1 = await agent.run('List files in current directory');
+    console.log(result1);
+
+    // Structured output
+    console.log('\nQuery 2: Structured');
+    const schema = z.object({
+      files: z.array(z.string()),
+      count: z.number()
+    });
+    
+    const result2 = await agent.run({
+      prompt: 'List all TypeScript files',
+      schema,
+      maxSteps: 10
+    });
+    
+    console.log(`Found ${result2.count} TypeScript files`);
+    result2.files.forEach(file => console.log(`  - ${file}`));
+
+    // With timeout
+    console.log('\nQuery 3: With timeout');
+    const result3 = await agent.run({
+      prompt: 'Find all TODO comments in TypeScript files',
+      maxSteps: 20,
+      signal: AbortSignal.timeout(60000)
+    });
+    console.log(result3);
+
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await agent.close();
+  }
+}
+
+main();
+```
+
+## Error Handling
+
+```typescript
+try {
+  const result = await agent.run('Query');
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.error('Query was aborted');
+  } else if (error.message.includes('max_steps')) {
+    console.error('Agent exceeded maximum steps');
+  } else if (error.message.includes('tool')) {
+    console.error('Tool execution failed:', error);
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+## Cleanup
+
+Always close the agent when done:
+
+```typescript
+// Automatic cleanup with try/finally
+try {
+  const result = await agent.run('Query');
+  console.log(result);
+} finally {
+  await agent.close();
+}
+```
+
+The `close()` method:
+- Disconnects from MCP servers
+- Cleans up LLM resources
+- Flushes observability traces
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="broadcast-tower" href="/typescript/agent/streaming">
+    Get real-time agent updates
+  </Card>
+  <Card title="Memory Management" icon="brain" href="/typescript/agent/memory">
+    Work with conversation history
+  </Card>
+  <Card title="Server Manager" icon="server" href="/typescript/agent/server-manager">
+    Dynamic server switching
+  </Card>
+  <Card title="Agent Overview" icon="robot" href="/typescript/agent/overview">
+    Back to overview
+  </Card>
+</CardGroup>

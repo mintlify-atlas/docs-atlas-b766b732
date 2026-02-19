@@ -1,0 +1,388 @@
+---
+title: "Client Sessions"
+description: "Manage MCP client sessions and operations"
+icon: "network-wired"
+---
+
+## Session Overview
+
+An `MCPSession` represents an active connection to an MCP server. It provides methods to:
+
+- Call tools
+- List and read resources
+- Get prompts
+- Manage connection lifecycle
+
+## Getting a Session
+
+Retrieve a session after connecting:
+
+```python
+from mcp_use import MCPClient
+
+client = MCPClient.from_config_file("config.json")
+await client.create_all_sessions()
+
+# Get a specific session
+session = client.get_session("server-name")
+```
+
+## Calling Tools
+
+Invoke tools directly through a session:
+
+```python
+# Basic tool call
+result = await session.call_tool(
+    name="add",
+    arguments={"a": 5, "b": 3}
+)
+
+# Access result
+if result.isError:
+    print(f"Error: {result.content}")
+else:
+    print(f"Result: {result.content[0].text}")
+```
+
+### Tool Call with Timeout
+
+```python
+from datetime import timedelta
+
+result = await session.call_tool(
+    name="long_operation",
+    arguments={},
+    read_timeout_seconds=timedelta(seconds=60)
+)
+```
+
+## Listing Tools
+
+Discover available tools:
+
+```python
+# List all tools
+tools = await session.list_tools()
+
+for tool in tools:
+    print(f"Tool: {tool.name}")
+    print(f"  Description: {tool.description}")
+    print(f"  Input Schema: {tool.inputSchema}")
+    print()
+```
+
+## Working with Resources
+
+### Listing Resources
+
+```python
+# Get all resources
+resources = await session.list_resources()
+
+for resource in resources:
+    print(f"Resource: {resource.name}")
+    print(f"  URI: {resource.uri}")
+    print(f"  Description: {resource.description}")
+    print(f"  MIME Type: {resource.mimeType}")
+```
+
+### Reading Resources
+
+```python
+from pydantic import AnyUrl
+
+# Read a specific resource
+uri = AnyUrl("data://config")
+result = await session.read_resource(uri)
+
+# Access content
+for content in result.contents:
+    if hasattr(content, 'text'):
+        print(content.text)
+    elif hasattr(content, 'blob'):
+        print(f"Binary data: {len(content.blob)} bytes")
+```
+
+### Template Resources
+
+```python
+# Read template resource with parameters
+uri = AnyUrl("user://123")
+result = await session.read_resource(uri)
+print(result.contents[0].text)
+```
+
+## Working with Prompts
+
+### Listing Prompts
+
+```python
+# Get all prompts
+prompts = await session.list_prompts()
+
+for prompt in prompts:
+    print(f"Prompt: {prompt.name}")
+    print(f"  Description: {prompt.description}")
+    if prompt.arguments:
+        print(f"  Arguments: {prompt.arguments}")
+```
+
+### Getting Prompts
+
+```python
+# Get a prompt
+result = await session.get_prompt(
+    name="code_review",
+    arguments={
+        "language": "python",
+        "code": "def add(a, b): return a + b"
+    }
+)
+
+# Access prompt messages
+for message in result.messages:
+    print(f"Role: {message.role}")
+    print(f"Content: {message.content.text}")
+```
+
+## Session State
+
+### Connection Status
+
+```python
+# Check if session is connected
+if session.is_connected:
+    print("Session is active")
+else:
+    print("Session is disconnected")
+```
+
+### Session Information
+
+```python
+# Get session info
+if session.session_info:
+    print(f"Server info: {session.session_info}")
+    print(f"Capabilities: {session.session_info.get('capabilities')}")
+```
+
+## Session Lifecycle
+
+### Initialize Session
+
+```python
+# Create session without auto-initialization
+session = await client.create_session(
+    "server-name",
+    auto_initialize=False
+)
+
+# Initialize manually
+info = await session.initialize()
+print(f"Server capabilities: {info.capabilities}")
+```
+
+### Connect and Disconnect
+
+```python
+# Manual connection control
+await session.connect()
+
+# Use session
+result = await session.call_tool("tool_name", {})
+
+# Disconnect
+await session.disconnect()
+```
+
+### Close Session
+
+```python
+# Close a specific session
+await client.close_session("server-name")
+
+# Close all sessions
+await client.close_all_sessions()
+```
+
+## Error Handling
+
+### Tool Call Errors
+
+```python
+try:
+    result = await session.call_tool("risky_tool", {})
+    
+    if result.isError:
+        print(f"Tool returned error: {result.content}")
+    else:
+        print(f"Success: {result.content[0].text}")
+except Exception as e:
+    print(f"Exception occurred: {e}")
+```
+
+### Connection Errors
+
+```python
+try:
+    result = await session.call_tool("tool_name", {})
+except RuntimeError as e:
+    print(f"Connection lost: {e}")
+    # Session will attempt to reconnect
+    await session.connect()
+```
+
+## Batch Operations
+
+### Multiple Tool Calls
+
+```python
+import asyncio
+
+# Call multiple tools concurrently
+tasks = [
+    session.call_tool("tool1", {"arg": "value1"}),
+    session.call_tool("tool2", {"arg": "value2"}),
+    session.call_tool("tool3", {"arg": "value3"})
+]
+
+results = await asyncio.gather(*tasks)
+
+for i, result in enumerate(results):
+    print(f"Result {i+1}: {result.content[0].text}")
+```
+
+### Read Multiple Resources
+
+```python
+import asyncio
+
+resources = await session.list_resources()
+
+# Read all resources concurrently
+tasks = [
+    session.read_resource(resource.uri)
+    for resource in resources[:5]  # First 5 resources
+]
+
+contents = await asyncio.gather(*tasks)
+
+for resource, content in zip(resources[:5], contents):
+    print(f"{resource.name}: {content.contents[0].text[:100]}")
+```
+
+## Session Context Manager
+
+```python
+class SessionContext:
+    def __init__(self, client, server_name):
+        self.client = client
+        self.server_name = server_name
+        self.session = None
+    
+    async def __aenter__(self):
+        self.session = await self.client.create_session(self.server_name)
+        return self.session
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.close_session(self.server_name)
+
+# Usage
+client = MCPClient.from_config_file("config.json")
+
+async with SessionContext(client, "my-server") as session:
+    result = await session.call_tool("tool_name", {})
+    print(result.content[0].text)
+# Session automatically closed
+```
+
+## Advanced Operations
+
+### Tool Input Validation
+
+```python
+# Get tool schema
+tools = await session.list_tools()
+tool = next(t for t in tools if t.name == "my_tool")
+
+schema = tool.inputSchema
+print(f"Required properties: {schema.get('required', [])}")
+print(f"Properties: {schema.get('properties', {})}")
+
+# Validate before calling
+if "required_param" in schema.get('required', []):
+    result = await session.call_tool("my_tool", {
+        "required_param": "value"
+    })
+```
+
+### Resource Metadata
+
+```python
+resources = await session.list_resources()
+
+for resource in resources:
+    # Check MIME type
+    if resource.mimeType == "application/json":
+        content = await session.read_resource(resource.uri)
+        import json
+        data = json.loads(content.contents[0].text)
+        print(f"JSON data: {data}")
+    elif resource.mimeType == "text/plain":
+        content = await session.read_resource(resource.uri)
+        print(f"Text: {content.contents[0].text}")
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Check Connection Status">
+    Always verify connection before operations:
+    ```python
+    if session.is_connected:
+        result = await session.call_tool("tool", {})
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Tool Errors">
+    Check for errors in tool results:
+    ```python
+    result = await session.call_tool("tool", {})
+    if result.isError:
+        handle_error(result.content)
+    ```
+  </Accordion>
+
+  <Accordion title="Use Timeouts">
+    Set appropriate timeouts for long operations:
+    ```python
+    result = await session.call_tool(
+        "long_tool",
+        {},
+        read_timeout_seconds=timedelta(minutes=5)
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Batch Operations">
+    Use asyncio.gather for concurrent operations:
+    ```python
+    results = await asyncio.gather(
+        session.call_tool("tool1", {}),
+        session.call_tool("tool2", {})
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agent Overview" icon="robot" href="/python/agent/overview">
+    Learn about MCP agents
+  </Card>
+  <Card title="Client API" icon="book" href="/python/api/client">
+    Complete client API reference
+  </Card>
+</CardGroup>

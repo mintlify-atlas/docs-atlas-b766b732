@@ -1,0 +1,636 @@
+---
+title: "Tools, Resources & Prompts"
+description: "Understanding the three core MCP primitives"
+icon: "toolbox"
+---
+
+## The Three MCP Primitives
+
+The Model Context Protocol defines three core primitives that enable AI models to interact with external systems:
+
+<CardGroup cols={3}>
+  <Card title="Tools" icon="wrench">
+    Functions that AI models can call to perform actions
+  </Card>
+  <Card title="Resources" icon="database">
+    Read-only data that AI models can access
+  </Card>
+  <Card title="Prompts" icon="comment-dots">
+    Reusable templates for common tasks
+  </Card>
+</CardGroup>
+
+## Tools
+
+### What are Tools?
+
+**Tools** are functions that AI models can call to perform actions or retrieve dynamic data. They represent executable capabilities that extend what an AI can do.
+
+<Tabs>
+  <Tab title="TypeScript">
+    
+### Creating Tools
+
+Define tools with schema validation using Zod:
+
+```typescript
+import { MCPServer, text, object } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "tools-example",
+  version: "1.0.0",
+});
+
+// Simple tool
+server.tool({
+  name: "get_current_time",
+  description: "Get the current time",
+  schema: z.object({
+    timezone: z.string().optional(),
+  }),
+}, async ({ timezone = "UTC" }) => {
+  const time = new Date().toLocaleTimeString("en-US", { timeZone: timezone });
+  return text(`Current time in ${timezone}: ${time}`);
+});
+
+// Tool with complex schema
+server.tool({
+  name: "search_products",
+  description: "Search for products in the database",
+  schema: z.object({
+    query: z.string().describe("Search query"),
+    category: z.enum(["electronics", "clothing", "books"]).optional(),
+    minPrice: z.number().min(0).optional(),
+    maxPrice: z.number().positive().optional(),
+    limit: z.number().int().positive().default(10),
+  }),
+}, async ({ query, category, minPrice, maxPrice, limit }) => {
+  const results = await db.search({
+    query,
+    category,
+    priceRange: { min: minPrice, max: maxPrice },
+    limit,
+  });
+  
+  return object({
+    results,
+    count: results.length,
+    query,
+  });
+});
+
+await server.listen(3000);
+```
+
+### Response Types
+
+Tools can return different content types:
+
+<CodeGroup>
+
+```typescript Text Response
+import { text } from "mcp-use/server";
+
+server.tool({
+  name: "greet",
+  schema: z.object({ name: z.string() }),
+}, async ({ name }) => {
+  return text(`Hello, ${name}!`);
+});
+```
+
+```typescript JSON Object
+import { object } from "mcp-use/server";
+
+server.tool({
+  name: "get_user",
+  schema: z.object({ id: z.string() }),
+}, async ({ id }) => {
+  const user = await db.getUser(id);
+  return object(user);
+});
+```
+
+```typescript Markdown
+import { markdown } from "mcp-use/server";
+
+server.tool({
+  name: "format_code",
+  schema: z.object({ code: z.string() }),
+}, async ({ code }) => {
+  return markdown(`
+# Formatted Code
+
+\`\`\`javascript
+${code}
+\`\`\`
+  `);
+});
+```
+
+```typescript Binary Data
+import { blob } from "mcp-use/server";
+
+server.tool({
+  name: "generate_image",
+  schema: z.object({ prompt: z.string() }),
+}, async ({ prompt }) => {
+  const imageData = await generateImage(prompt);
+  return blob(imageData, "image/png");
+});
+```
+
+</CodeGroup>
+
+### Progress Tracking
+
+Provide progress updates for long-running operations:
+
+```typescript
+server.tool({
+  name: "process_large_file",
+  schema: z.object({ filename: z.string() }),
+}, async ({ filename }, { progress }) => {
+  const fileSize = await getFileSize(filename);
+  let processed = 0;
+  
+  progress?.({ progress: 0, total: fileSize });
+  
+  await processFile(filename, (bytes) => {
+    processed += bytes;
+    progress?.({ progress: processed, total: fileSize });
+  });
+  
+  return text(`Processed ${filename} successfully`);
+});
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+    
+### Creating Tools
+
+```python
+from typing import Annotated
+from mcp.types import ToolAnnotations
+from pydantic import Field
+from mcp_use import MCPServer
+
+server = MCPServer(name="Tools Example", version="1.0.0")
+
+# Simple tool
+@server.tool(
+    name="get_current_time",
+    description="Get the current time in a specific timezone",
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+async def get_current_time(
+    timezone: Annotated[str, Field(description="Timezone name")] = "UTC",
+) -> str:
+    from datetime import datetime
+    import pytz
+    
+    tz = pytz.timezone(timezone)
+    time = datetime.now(tz).strftime("%H:%M:%S")
+    return f"Current time in {timezone}: {time}"
+
+# Complex tool with validation
+@server.tool(
+    name="search_products",
+    description="Search for products",
+)
+async def search_products(
+    query: Annotated[str, Field(description="Search query")],
+    category: Annotated[str, Field(description="Product category")] | None = None,
+    min_price: Annotated[float, Field(ge=0, description="Minimum price")] | None = None,
+    max_price: Annotated[float, Field(gt=0, description="Maximum price")] | None = None,
+    limit: Annotated[int, Field(gt=0, le=100, description="Max results")] = 10,
+) -> dict:
+    results = await db.search(
+        query=query,
+        category=category,
+        price_range={"min": min_price, "max": max_price},
+        limit=limit,
+    )
+    
+    return {
+        "results": results,
+        "count": len(results),
+        "query": query,
+    }
+
+server.run(transport="streamable-http", port=8000)
+```
+
+  </Tab>
+</Tabs>
+
+### Tool Annotations
+
+Provide hints to AI models about tool behavior:
+
+```typescript
+server.tool({
+  name: "read_file",
+  description: "Read contents of a file",
+  schema: z.object({ path: z.string() }),
+  annotations: {
+    readOnlyHint: true,      // Doesn't modify state
+    openWorldHint: true,     // Can access external data
+    requiresAuth: true,      // Needs authentication
+  },
+}, async ({ path }) => {
+  const content = await fs.readFile(path, "utf-8");
+  return text(content);
+});
+```
+
+## Resources
+
+### What are Resources?
+
+**Resources** provide read-only access to data. Unlike tools, resources are not actions but rather data sources that AI models can read from.
+
+<Tabs>
+  <Tab title="TypeScript">
+    
+### Static Resources
+
+Resources with fixed URIs:
+
+```typescript
+server.resource({
+  name: "app-config",
+  uri: "app://config",
+  title: "Application Configuration",
+  description: "Global application settings",
+}, async () => {
+  const config = await loadConfig();
+  return text(JSON.stringify(config, null, 2));
+});
+
+server.resource({
+  name: "readme",
+  uri: "app://readme",
+  title: "README",
+  mimeType: "text/markdown",
+}, async () => {
+  const readme = await fs.readFile("README.md", "utf-8");
+  return markdown(readme);
+});
+```
+
+### Dynamic Resources (URI Templates)
+
+Resources with parameters in the URI:
+
+```typescript
+server.resource({
+  name: "user-profile",
+  uri: "app://users/{userId}",
+  title: "User Profile",
+  description: "Get user profile by ID",
+}, async ({ userId }) => {
+  const user = await db.getUser(userId);
+  return object(user);
+});
+
+server.resource({
+  name: "file-content",
+  uri: "file://{path}",
+  title: "File Contents",
+  mimeType: "text/plain",
+}, async ({ path }) => {
+  const content = await fs.readFile(path, "utf-8");
+  return text(content);
+});
+```
+
+### Resource Lists
+
+Provide a list of available resources:
+
+```typescript
+server.on("resources/list", async () => {
+  const files = await fs.readdir("./data");
+  
+  return {
+    resources: files.map(file => ({
+      uri: `file://data/${file}`,
+      name: file,
+      mimeType: "text/plain",
+    })),
+  };
+});
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+    
+### Creating Resources
+
+```python
+@server.resource(
+    name="app-config",
+    uri="app://config",
+    title="Application Configuration",
+    description="Global application settings",
+)
+async def get_config() -> str:
+    config = await load_config()
+    return json.dumps(config, indent=2)
+
+# Dynamic resource with parameters
+@server.resource(
+    name="user-profile",
+    uri="app://users/{user_id}",
+    title="User Profile",
+)
+async def get_user_profile(user_id: str) -> dict:
+    user = await db.get_user(user_id)
+    return user
+```
+
+  </Tab>
+</Tabs>
+
+### Resource vs Tool
+
+When to use resources vs tools:
+
+| Use Resource When | Use Tool When |
+|-------------------|---------------|
+| Data is read-only | Need to perform an action |
+| Access is frequent | Operation is expensive |
+| Data is cacheable | Need real-time data |
+| No side effects | Has side effects |
+| Static or semi-static | Requires computation |
+
+## Prompts
+
+Prompts provide reusable templates for AI model instructions.
+
+### TypeScript
+
+**Creating Prompts**
+
+```typescript
+// Simple prompt
+server.prompt({
+  name: "greeting",
+  description: "Generate a personalized greeting",
+  schema: z.object({
+    name: z.string(),
+    language: z.string().optional(),
+  }),
+}, async ({ name, language = "en" }) => {
+  const greetings = {
+    en: `Hello ${name}!`,
+    es: `¡Hola ${name}!`,
+    fr: `Bonjour ${name}!`,
+  };
+  return greetings[language] || greetings.en;
+});
+
+// Code review prompt
+server.prompt({
+  name: "code-review",
+  description: "Review code for quality and best practices",
+  schema: z.object({
+    code: z.string(),
+    language: z.string(),
+    focus: z.enum(["security", "performance", "readability", "all"]).default("all"),
+  }),
+}, async ({ code, language, focus }) => {
+  return `Please review this ${language} code with a focus on ${focus}:
+
+\`\`\`${language}
+${code}
+\`\`\`
+
+Provide:
+1. Issues found
+2. Suggestions for improvement
+3. Best practices recommendations
+  `;
+});
+```
+
+**Using Prompts**
+
+```typescript
+import { MCPClient } from "mcp-use/client";
+
+const client = MCPClient.fromDict({
+  mcpServers: {
+    prompts: { command: "node", args: ["my-prompts.js"] },
+  },
+});
+
+await client.createAllSessions();
+const session = client.getSession("prompts");
+
+// Get available prompts
+const prompts = await session.listPrompts();
+
+// Use a prompt
+const greeting = await session.getPrompt("greeting", {
+  name: "Alice",
+  language: "fr",
+});
+console.log(greeting.messages[0].content.text);
+```
+
+### Python
+
+**Creating Prompts**
+
+```python
+@server.prompt(
+    name="greeting",
+    description="Generate a personalized greeting",
+)
+async def greeting_prompt(
+    name: str,
+    language: str = "en",
+) -> str:
+    greetings = {
+        "en": f"Hello {name}!",
+        "es": f"¡Hola {name}!",
+        "fr": f"Bonjour {name}!",
+    }
+    return greetings.get(language, greetings["en"])
+
+@server.prompt(
+    name="code-review",
+    description="Review code for issues",
+)
+async def code_review_prompt(
+    code: str,
+    language: str,
+    focus: str = "all",
+) -> str:
+    return f"""
+Please review this {language} code with a focus on {focus}:
+
+```{language}
+{code}
+```
+
+Provide:
+1. Issues found
+2. Suggestions for improvement
+3. Best practices recommendations
+    """
+```
+
+### When to Use Prompts
+
+Prompts are ideal for:
+
+- 📖 **Standardizing** common instructions
+- 🔄 **Reusing** complex prompt templates
+- 🎯 **Guiding** AI model behavior consistently
+- 📦 **Packaging** domain expertise as templates
+- 🔗 **Chaining** multiple AI interactions
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Tool Design">
+    ✅ **Do:**
+    - Keep tools focused on a single responsibility
+    - Provide clear, descriptive names and descriptions
+    - Use schema validation for all inputs
+    - Return structured, predictable outputs
+    - Include progress updates for long operations
+    
+    ❌ **Don't:**
+    - Create "god tools" that do too many things
+    - Use vague or ambiguous names
+    - Return inconsistent data structures
+    - Expose dangerous operations without safeguards
+  </Accordion>
+  
+  <Accordion title="Resource Design">
+    ✅ **Do:**
+    - Use clear, hierarchical URI patterns
+    - Provide accurate MIME types
+    - Cache expensive resource computations
+    - Document URI template parameters
+    - Support resource listing
+    
+    ❌ **Don't:**
+    - Use resources for actions with side effects
+    - Return different data types for same URI
+    - Expose sensitive data without authentication
+    - Create deeply nested URI hierarchies
+  </Accordion>
+  
+  <Accordion title="Prompt Design">
+    ✅ **Do:**
+    - Write clear, specific instructions
+    - Include examples when helpful
+    - Parameterize variable parts
+    - Structure prompts for easy reading
+    - Test prompts with actual AI models
+    
+    ❌ **Don't:**
+    - Make prompts too rigid or prescriptive
+    - Include redundant or conflicting instructions
+    - Assume specific model capabilities
+    - Embed sensitive information in templates
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    Always handle errors gracefully and return structured error information. Use try-catch blocks and return structured error objects with success flags, error messages, and error codes. This allows clients to properly handle and display errors to users.
+  </Accordion>
+</AccordionGroup>
+
+## Examples
+
+### Complete Server with All Three Primitives
+
+```typescript
+import { MCPServer, text, object, markdown } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "complete-example",
+  version: "1.0.0",
+});
+
+// TOOL: Perform actions
+server.tool({
+  name: "create_task",
+  description: "Create a new task",
+  schema: z.object({
+    title: z.string(),
+    priority: z.enum(["low", "medium", "high"]),
+  }),
+}, async ({ title, priority }) => {
+  const task = await db.createTask({ title, priority });
+  return object(task);
+});
+
+// RESOURCE: Access data
+server.resource({
+  name: "task-list",
+  uri: "app://tasks",
+  title: "All Tasks",
+}, async () => {
+  const tasks = await db.getAllTasks();
+  return object(tasks);
+});
+
+server.resource({
+  name: "task-detail",
+  uri: "app://tasks/{taskId}",
+  title: "Task Details",
+}, async ({ taskId }) => {
+  const task = await db.getTask(taskId);
+  return object(task);
+});
+
+// PROMPT: Guide AI
+server.prompt({
+  name: "prioritize-tasks",
+  description: "Help prioritize tasks",
+  schema: z.object({
+    tasks: z.array(z.string()),
+  }),
+}, async ({ tasks }) => {
+  return text(`
+Please help prioritize these tasks based on urgency and importance:
+
+${tasks.map((t, i) => `${i + 1}. ${t}`).join("\n")}
+
+For each task, suggest:
+- Priority level (low/medium/high)
+- Reasoning
+- Estimated effort
+  `);
+});
+
+await server.listen(3000);
+```
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Build Your First Server" icon="server" href="/guides/building-your-first-server">
+    Complete guide with examples of all three primitives
+  </Card>
+  <Card title="MCP Protocol" icon="network-wired" href="/concepts/mcp-protocol">
+    Deep dive into the protocol specification
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    How mcp-use implements these primitives
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Complete API documentation
+  </Card>
+</CardGroup>

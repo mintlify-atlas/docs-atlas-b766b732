@@ -1,0 +1,511 @@
+---
+title: "MCPClient API Reference"
+description: "Complete MCPClient class API documentation for connecting to MCP servers"
+icon: "plug"
+---
+
+## MCPClient
+
+The `MCPClient` class provides a Node.js MCP client implementation with support for all connector types (Stdio, HTTP, WebSocket), code execution mode, and advanced protocol features.
+
+### Constructor
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient('./mcp-config.json', {
+  codeMode: true,
+  onSampling: async (params) => {
+    return await callYourLLM(params);
+  }
+});
+```
+
+<ParamField path="config" type="string | Record<string, any>">
+  Configuration file path (JSON) or inline configuration object
+</ParamField>
+
+<ParamField path="options" type="MCPClientOptions">
+  Optional client behavior configuration
+</ParamField>
+
+<ParamField path="options.codeMode" type="boolean | CodeModeConfig">
+  Enable code execution mode with VM or E2B sandbox
+</ParamField>
+
+<ParamField path="options.onSampling" type="(params: CreateMessageRequest) => Promise<CreateMessageResult>">
+  Callback for handling sampling requests from servers
+</ParamField>
+
+<ParamField path="options.onElicitation" type="(params: ElicitRequestFormParams | ElicitRequestURLParams) => Promise<ElicitResult>">
+  Callback for handling elicitation requests from servers
+</ParamField>
+
+<ParamField path="options.onNotification" type="(notification: Notification) => void | Promise<void>">
+  Callback for server notifications
+</ParamField>
+
+### Static Methods
+
+#### getPackageVersion()
+
+Get the mcp-use package version.
+
+```typescript
+const version = MCPClient.getPackageVersion();
+console.log(`Client version: ${version}`);
+```
+
+<ResponseField name="return" type="string">
+  The package version string (e.g., "1.13.2")
+</ResponseField>
+
+#### fromDict()
+
+Create a client from an inline configuration object.
+
+```typescript
+const client = MCPClient.fromDict({
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    }
+  }
+}, { codeMode: true });
+```
+
+<ParamField path="config" type="Record<string, any>" required>
+  Configuration dictionary with server definitions
+</ParamField>
+
+<ParamField path="options" type="MCPClientOptions">
+  Optional client behavior configuration
+</ParamField>
+
+<ResponseField name="return" type="MCPClient">
+  New MCPClient instance
+</ResponseField>
+
+#### fromConfigFile()
+
+Create a client from a JSON configuration file.
+
+```typescript
+const client = MCPClient.fromConfigFile('./mcp-config.json', {
+  codeMode: true
+});
+```
+
+<ParamField path="path" type="string" required>
+  Path to JSON configuration file
+</ParamField>
+
+<ParamField path="options" type="MCPClientOptions">
+  Optional client behavior configuration
+</ParamField>
+
+<ResponseField name="return" type="MCPClient">
+  New MCPClient instance
+</ResponseField>
+
+### Instance Methods
+
+#### createSession()
+
+Create a connection session for a specific server.
+
+```typescript
+const session = await client.createSession('filesystem');
+const tools = await session.listTools();
+```
+
+<ParamField path="serverName" type="string" required>
+  Name of the server from configuration
+</ParamField>
+
+<ResponseField name="return" type="Promise<MCPSession>">
+  Session object for interacting with the server
+</ResponseField>
+
+#### createAllSessions()
+
+Create sessions for all configured servers.
+
+```typescript
+const sessions = await client.createAllSessions();
+for (const [name, session] of Object.entries(sessions)) {
+  console.log(`Connected to ${name}`);
+}
+```
+
+<ResponseField name="return" type="Promise<Record<string, MCPSession>>">
+  Map of server names to session objects
+</ResponseField>
+
+#### closeSession()
+
+Close a specific server session.
+
+```typescript
+await client.closeSession('filesystem');
+```
+
+<ParamField path="serverName" type="string" required>
+  Name of the server to disconnect from
+</ParamField>
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when session is closed
+</ResponseField>
+
+#### closeAllSessions()
+
+Close all active server sessions.
+
+```typescript
+await client.closeAllSessions();
+```
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when all sessions are closed
+</ResponseField>
+
+#### addServer()
+
+Dynamically add a server configuration.
+
+```typescript
+client.addServer('weather', {
+  command: 'node',
+  args: ['./weather-server.js']
+});
+```
+
+<ParamField path="name" type="string" required>
+  Unique server name
+</ParamField>
+
+<ParamField path="config" type="ServerConfig" required>
+  Server configuration (command/args for stdio, url for HTTP)
+</ParamField>
+
+#### removeServer()
+
+Remove a server configuration.
+
+```typescript
+client.removeServer('weather');
+```
+
+<ParamField path="name" type="string" required>
+  Name of server to remove
+</ParamField>
+
+#### getServerNames()
+
+Get names of all configured servers.
+
+```typescript
+const servers = client.getServerNames();
+console.log(`Configured servers: ${servers.join(', ')}`);
+```
+
+<ResponseField name="return" type="string[]">
+  Array of server names
+</ResponseField>
+
+#### getAllActiveSessions()
+
+Get all active session objects.
+
+```typescript
+const sessions = client.getAllActiveSessions();
+for (const [name, session] of Object.entries(sessions)) {
+  const tools = await session.listTools();
+  console.log(`${name}: ${tools.length} tools`);
+}
+```
+
+<ResponseField name="return" type="Record<string, MCPSession>">
+  Map of server names to active sessions
+</ResponseField>
+
+#### saveConfig()
+
+Save the current configuration to a file (Node.js only).
+
+```typescript
+client.addServer('new-server', { command: 'node', args: ['server.js'] });
+client.saveConfig('./mcp-config.json');
+```
+
+<ParamField path="filepath" type="string" required>
+  Path where configuration file should be saved
+</ParamField>
+
+#### executeCode()
+
+Execute JavaScript/TypeScript code in a sandbox (requires `codeMode: true`).
+
+```typescript
+const client = new MCPClient('./config.json', { codeMode: true });
+
+const result = await client.executeCode(`
+  console.log('Hello, world!');
+  return 2 + 2;
+`);
+
+console.log(result.stdout);      // "Hello, world!\n"
+console.log(result.returnValue); // 4
+```
+
+<ParamField path="code" type="string" required>
+  JavaScript/TypeScript code to execute
+</ParamField>
+
+<ParamField path="timeout" type="number">
+  Execution timeout in milliseconds
+</ParamField>
+
+<ResponseField name="return" type="Promise<ExecutionResult>">
+  Object containing stdout, stderr, returnValue, and error
+</ResponseField>
+
+#### searchTools()
+
+Search for tools across all servers (requires `codeMode: true`).
+
+```typescript
+const allTools = await client.searchTools();
+const fileTools = await client.searchTools('file', 'descriptions');
+```
+
+<ParamField path="query" type="string" default="''">
+  Search query to filter tools
+</ParamField>
+
+<ParamField path="detailLevel" type="'names' | 'descriptions' | 'full'" default="'full'">
+  Level of detail to return
+</ParamField>
+
+<ResponseField name="return" type="Promise<ToolSearchResponse>">
+  Tool search results with matching tools
+</ResponseField>
+
+#### close()
+
+Close the client and clean up all resources.
+
+```typescript
+await client.close();
+```
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when cleanup is complete
+</ResponseField>
+
+### Properties
+
+#### codeMode
+
+```typescript
+if (client.codeMode) {
+  const result = await client.executeCode('return 42');
+}
+```
+
+Indicates whether code execution mode is enabled.
+
+<ResponseField name="type" type="boolean">
+  True if code mode is enabled
+</ResponseField>
+
+#### activeSessions
+
+```typescript
+console.log(`Active sessions: ${client.activeSessions.join(', ')}`);
+```
+
+Array of names of servers with active sessions.
+
+<ResponseField name="type" type="string[]">
+  Array of active server names
+</ResponseField>
+
+## Related Types
+
+### MCPClientOptions
+
+Client behavior configuration:
+
+```typescript
+interface MCPClientOptions {
+  codeMode?: boolean | CodeModeConfig;
+  onSampling?: (params: CreateMessageRequest) => Promise<CreateMessageResult>;
+  onElicitation?: (params: ElicitRequestFormParams | ElicitRequestURLParams) => Promise<ElicitResult>;
+  onNotification?: (notification: Notification) => void | Promise<void>;
+}
+```
+
+### CodeModeConfig
+
+Advanced code execution configuration:
+
+```typescript
+interface CodeModeConfig {
+  enabled: boolean;
+  executor?: 'vm' | 'e2b' | CodeExecutorFunction | BaseCodeExecutor;
+  executorOptions?: VMExecutorOptions | E2BExecutorOptions;
+}
+
+interface VMExecutorOptions {
+  timeoutMs?: number;      // Default: 30000 (30 seconds)
+  memoryLimitMb?: number;  // No limit by default
+}
+
+interface E2BExecutorOptions {
+  apiKey: string;          // E2B API key (required)
+  timeoutMs?: number;      // Default: 300000 (5 minutes)
+}
+```
+
+### ServerConfig
+
+Server configuration for addServer():
+
+```typescript
+interface ServerConfig {
+  // Stdio server
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  
+  // HTTP server
+  url?: string;
+  headers?: Record<string, string>;
+  
+  // WebSocket server
+  ws_url?: string;
+  
+  // Callbacks
+  onSampling?: (params: CreateMessageRequest) => Promise<CreateMessageResult>;
+  onElicitation?: (params: ElicitRequestFormParams | ElicitRequestURLParams) => Promise<ElicitResult>;
+  onNotification?: (notification: Notification) => void | Promise<void>;
+}
+```
+
+### ExecutionResult
+
+Result from executeCode():
+
+```typescript
+interface ExecutionResult {
+  stdout: string;       // Standard output
+  stderr: string;       // Standard error
+  returnValue: any;     // Return value from code
+  error?: string;       // Error message if execution failed
+}
+```
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient({
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    }
+  }
+});
+
+const session = await client.createSession('filesystem');
+const tools = await session.listTools();
+console.log(`Available tools: ${tools.map(t => t.name).join(', ')}`);
+```
+
+### With Code Execution
+
+```typescript
+const client = new MCPClient('./config.json', {
+  codeMode: {
+    enabled: true,
+    executor: 'e2b',
+    executorOptions: {
+      apiKey: process.env.E2B_API_KEY
+    }
+  }
+});
+
+const result = await client.executeCode(`
+  const fs = require('fs');
+  const files = fs.readdirSync('/tmp');
+  return files;
+`);
+
+console.log('Files:', result.returnValue);
+```
+
+### With Sampling Callback
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic();
+
+const client = new MCPClient('./config.json', {
+  onSampling: async (params) => {
+    const response = await anthropic.messages.create({
+      model: params.modelPreferences.hints?.[0]?.name || 'claude-3-5-sonnet-20241022',
+      max_tokens: params.maxTokens || 1024,
+      messages: params.messages
+    });
+    
+    return {
+      role: 'assistant',
+      content: response.content
+    };
+  }
+});
+```
+
+### Multi-Server Setup
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    },
+    'weather': {
+      url: 'http://localhost:3000/mcp'
+    },
+    'database': {
+      command: 'node',
+      args: ['./db-server.js'],
+      env: {
+        DB_HOST: 'localhost',
+        DB_PORT: '5432'
+      }
+    }
+  }
+});
+
+await client.createAllSessions();
+
+// Use sessions
+const fsSession = client.getAllActiveSessions()['filesystem'];
+const result = await fsSession.callTool('read_file', { path: '/tmp/test.txt' });
+```
+
+## See Also
+
+- [MCPAgent API](/typescript/api/agent) - High-level AI agent
+- [MCPServer API](/typescript/api/server) - Server for building MCP servers
+- [MCPSession](/typescript/api/client#mcpsession) - Session management

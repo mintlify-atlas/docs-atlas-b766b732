@@ -1,0 +1,751 @@
+---
+title: "Session Management"
+description: "Complete guide to MCPSession - lifecycle, operations, and best practices"
+icon: "diagram-project"
+---
+
+## Overview
+
+An `MCPSession` represents a single active connection to an MCP server. Sessions manage the connection lifecycle, provide methods for calling tools and accessing resources, and handle server notifications. Each session wraps a transport connector (Stdio, HTTP, or WebSocket) and provides a high-level API.
+
+## Session Architecture
+
+```
+MCPSession
+    │
+    ├── Connector (transport layer)
+    │      ├── StdioConnector
+    │      ├── HttpConnector
+    │      └── WebSocketConnector
+    │
+    ├── MCP Client (SDK)
+    │      ├── Protocol handling
+    │      ├── Request/response
+    │      └── Capability negotiation
+    │
+    └── Operations
+           ├── Tool invocation
+           ├── Resource access
+           ├── Prompt retrieval
+           ├── Notification handling
+           └── Roots management
+```
+
+## Creating Sessions
+
+### Via MCPClient
+
+The recommended way to create sessions (`src/session.ts:55`):
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient('./mcp-config.json');
+
+// Create single session
+const session = await client.createSession('my-server');
+
+// Create all configured sessions
+const sessions = await client.createAllSessions();
+
+// Retrieve existing session
+const existing = client.getSession('my-server');
+if (!existing) {
+  console.log('Session not found');
+}
+
+// Require session (throws if not found)
+const required = client.requireSession('my-server');
+```
+
+### Manual Creation
+
+For advanced use cases:
+
+```typescript
+import { MCPSession, StdioConnector } from 'mcp-use';
+
+// Create connector
+const connector = new StdioConnector({
+  command: 'npx',
+  args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+});
+
+// Create session
+const session = new MCPSession(connector);
+
+// Initialize (connects + handshake)
+await session.initialize();
+
+// Use session...
+
+// Cleanup
+await session.disconnect();
+```
+
+## Session Lifecycle
+
+### Connection Flow
+
+```typescript
+import { MCPSession, HttpConnector } from 'mcp-use';
+
+const connector = new HttpConnector('https://api.example.com/mcp');
+const session = new MCPSession(connector, false); // No auto-connect
+
+// 1. Connect transport
+await session.connect();
+console.log('Transport connected:', session.isConnected);
+
+// 2. Initialize MCP protocol
+await session.initialize();
+console.log('Session initialized');
+
+// 3. Use session
+const tools = await session.listTools();
+
+// 4. Disconnect
+await session.disconnect();
+console.log('Session closed:', !session.isConnected);
+```
+
+### Auto-Initialization
+
+Sessions created via `MCPClient.createSession()` auto-initialize by default:
+
+```typescript
+const client = new MCPClient('./config.json');
+
+// Auto-initializes (connect + initialize)
+const session1 = await client.createSession('server1');
+
+// Manual initialization
+const session2 = await client.createSession('server2', false);
+await session2.connect();
+await session2.initialize();
+```
+
+## Session Properties
+
+### Basic Properties
+
+<ResponseField name="connector" type="BaseConnector" readonly>
+  The underlying transport connector (`src/session.ts:60`).
+  
+  ```typescript
+  const connector = session.connector;
+  console.log('Type:', connector.publicIdentifier);
+  ```
+</ResponseField>
+
+<ResponseField name="isConnected" type="boolean" readonly>
+  Whether the session is currently connected (`src/session.ts:177`).
+  
+  ```typescript
+  if (session.isConnected) {
+    await session.callTool('my-tool', {});
+  }
+  ```
+</ResponseField>
+
+### Server Information
+
+<ResponseField name="serverInfo" type="{ name: string, version?: string } | null" readonly>
+  Server identification from initialization handshake (`src/session.ts:288`).
+  
+  ```typescript
+  console.log(`Server: ${session.serverInfo?.name}`);
+  console.log(`Version: ${session.serverInfo?.version}`);
+  ```
+</ResponseField>
+
+<ResponseField name="serverCapabilities" type="Record<string, unknown>" readonly>
+  Server capabilities advertised during initialization (`src/session.ts:279`).
+  
+  ```typescript
+  if (session.serverCapabilities.tools) {
+    console.log('Server supports tools');
+  }
+  if (session.serverCapabilities.resources) {
+    console.log('Server supports resources');
+  }
+  ```
+</ResponseField>
+
+### Cached Data
+
+<ResponseField name="tools" type="Tool[]" readonly>
+  Cached list of tools from last `listTools()` call (`src/session.ts:253`).
+  
+  ```typescript
+  const cached = session.tools;
+  console.log(`Cached: ${cached.length} tools`);
+  ```
+</ResponseField>
+
+<ResponseField name="getRoots" type="() => Root[]">
+  Get current roots advertised to server (`src/session.ts:238`).
+  
+  ```typescript
+  const roots = session.getRoots();
+  console.log('Roots:', roots.map(r => r.uri));
+  ```
+</ResponseField>
+
+## Tool Operations
+
+### Listing Tools
+
+```typescript
+import type { Tool } from 'mcp-use';
+
+const session = await client.createSession('my-server');
+
+// Fetch fresh tools from server
+const tools: Tool[] = await session.listTools();
+
+for (const tool of tools) {
+  console.log(`Tool: ${tool.name}`);
+  console.log(`  Description: ${tool.description}`);
+  console.log(`  Schema:`, tool.inputSchema);
+}
+
+// Access cached tools (no server request)
+const cached = session.tools;
+```
+
+### Calling Tools
+
+Invoke tools with parameters (`src/session.ts:306`):
+
+```typescript
+import type { CallToolResult } from 'mcp-use';
+
+const session = await client.createSession('filesystem');
+
+// Call tool with arguments
+const result: CallToolResult = await session.callTool('read_file', {
+  path: '/tmp/data.txt'
+});
+
+// Extract text content
+for (const content of result.content) {
+  if (content.type === 'text') {
+    console.log('File content:', content.text);
+  }
+}
+
+// Handle errors in results
+if (result.isError) {
+  console.error('Tool error:', result.content);
+}
+```
+
+### Tool Call Options
+
+```typescript
+import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
+
+const options: RequestOptions = {
+  timeout: 30000, // 30 seconds
+  signal: abortController.signal,
+  onProgress: (progress) => {
+    console.log('Progress:', progress);
+  }
+};
+
+const result = await session.callTool('long-running-tool', { arg: 'value' }, options);
+```
+
+### Error Handling
+
+```typescript
+try {
+  const result = await session.callTool('my-tool', { param: 'value' });
+  
+  // Check if tool returned an error
+  if (result.isError) {
+    console.error('Tool returned error:', result.content);
+  } else {
+    console.log('Success:', result.content);
+  }
+} catch (error) {
+  // Network or protocol errors
+  console.error('Call failed:', error.message);
+}
+```
+
+## Resource Operations
+
+### Listing Resources
+
+```typescript
+// List resources (with pagination support)
+const result = await session.listResources();
+
+for (const resource of result.resources) {
+  console.log(`Resource: ${resource.uri}`);
+  console.log(`  Name: ${resource.name}`);
+  console.log(`  Type: ${resource.mimeType}`);
+  console.log(`  Description: ${resource.description}`);
+}
+
+// Handle pagination
+if (result.nextCursor) {
+  const nextPage = await session.listResources(result.nextCursor);
+}
+```
+
+### Listing All Resources
+
+Automatically handles pagination (`src/session.ts:343`):
+
+```typescript
+const result = await session.listAllResources();
+console.log(`Total resources: ${result.resources.length}`);
+```
+
+### Resource Templates
+
+List available resource templates (`src/session.ts:358`):
+
+```typescript
+const result = await session.listResourceTemplates();
+
+for (const template of result.resourceTemplates) {
+  console.log(`Template: ${template.uriTemplate}`);
+  console.log(`  Description: ${template.description}`);
+  console.log(`  Mime type: ${template.mimeType}`);
+}
+```
+
+### Reading Resources
+
+Fetch resource content (`src/session.ts:375`):
+
+```typescript
+const resource = await session.readResource('file:///path/to/file.txt');
+
+for (const content of resource.contents) {
+  if (content.type === 'text') {
+    console.log('Content:', content.text);
+  } else if (content.type === 'blob') {
+    console.log('Binary data:', content.blob);
+  }
+}
+```
+
+### Resource Subscriptions
+
+Subscribe to resource updates (`src/session.ts:387`):
+
+```typescript
+// Subscribe to resource changes
+await session.subscribeToResource('file:///data/config.json');
+
+// Handle notifications (see Notification Handling section)
+session.on('notification', (notification) => {
+  if (notification.method === 'notifications/resources/updated') {
+    console.log('Resource updated:', notification.params.uri);
+    // Re-read resource
+  }
+});
+
+// Unsubscribe when done
+await session.unsubscribeFromResource('file:///data/config.json');
+```
+
+## Prompt Operations
+
+### Listing Prompts
+
+```typescript
+const result = await session.listPrompts();
+
+for (const prompt of result.prompts) {
+  console.log(`Prompt: ${prompt.name}`);
+  console.log(`  Description: ${prompt.description}`);
+  
+  if (prompt.arguments) {
+    console.log('  Arguments:');
+    for (const arg of prompt.arguments) {
+      console.log(`    - ${arg.name} (${arg.required ? 'required' : 'optional'})`);
+    }
+  }
+}
+```
+
+### Getting Prompts
+
+Retrieve prompt with arguments (`src/session.ts:438`):
+
+```typescript
+const prompt = await session.getPrompt('greeting', {
+  name: 'Alice',
+  language: 'en'
+});
+
+console.log('Prompt messages:', prompt.messages);
+for (const message of prompt.messages) {
+  console.log(`${message.role}: ${message.content}`);
+}
+```
+
+## Notification Handling
+
+### Registering Handlers
+
+Listen for server notifications (`src/session.ts:198`):
+
+```typescript
+import type { Notification } from 'mcp-use';
+
+session.on('notification', async (notification: Notification) => {
+  console.log(`[${notification.method}]`, notification.params);
+  
+  switch (notification.method) {
+    case 'notifications/tools/list_changed':
+      console.log('Tools list updated, refreshing...');
+      const tools = await session.listTools();
+      break;
+      
+    case 'notifications/resources/list_changed':
+      console.log('Resources list updated');
+      break;
+      
+    case 'notifications/resources/updated':
+      console.log('Resource updated:', notification.params?.uri);
+      break;
+      
+    case 'notifications/prompts/list_changed':
+      console.log('Prompts list updated');
+      break;
+      
+    case 'notifications/message':
+      console.log('Server message:', notification.params?.message);
+      break;
+      
+    default:
+      console.log('Unknown notification:', notification.method);
+  }
+});
+```
+
+### Standard Notifications
+
+MCP servers can send these standard notifications:
+
+<AccordionGroup>
+  <Accordion title="notifications/tools/list_changed">
+    The list of available tools has changed.
+    
+    ```typescript
+    session.on('notification', async (n) => {
+      if (n.method === 'notifications/tools/list_changed') {
+        const tools = await session.listTools();
+        console.log(`Updated tools: ${tools.length}`);
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="notifications/resources/list_changed">
+    The list of available resources has changed.
+    
+    ```typescript
+    session.on('notification', async (n) => {
+      if (n.method === 'notifications/resources/list_changed') {
+        const resources = await session.listAllResources();
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="notifications/resources/updated">
+    A specific resource has been updated.
+    
+    ```typescript
+    session.on('notification', async (n) => {
+      if (n.method === 'notifications/resources/updated') {
+        const uri = n.params.uri;
+        const resource = await session.readResource(uri);
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="notifications/prompts/list_changed">
+    The list of available prompts has changed.
+    
+    ```typescript
+    session.on('notification', async (n) => {
+      if (n.method === 'notifications/prompts/list_changed') {
+        const prompts = await session.listPrompts();
+      }
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Roots Management
+
+Roots represent file system directories or resources that the client makes available to the server.
+
+### Setting Roots
+
+Advertise roots to the server (`src/session.ts:218`):
+
+```typescript
+import type { Root } from 'mcp-use';
+
+const roots: Root[] = [
+  {
+    uri: 'file:///home/user/project',
+    name: 'My Project'
+  },
+  {
+    uri: 'file:///home/user/data',
+    name: 'Data Directory'
+  }
+];
+
+await session.setRoots(roots);
+```
+
+### Getting Roots
+
+Retrieve current roots (`src/session.ts:238`):
+
+```typescript
+const roots = session.getRoots();
+console.log('Current roots:');
+for (const root of roots) {
+  console.log(`  ${root.name}: ${root.uri}`);
+}
+```
+
+### Dynamic Root Updates
+
+```typescript
+// Initial roots
+await session.setRoots([
+  { uri: 'file:///project', name: 'Project' }
+]);
+
+// Add more roots later
+const current = session.getRoots();
+await session.setRoots([
+  ...current,
+  { uri: 'file:///data', name: 'Data' }
+]);
+```
+
+## Advanced Operations
+
+### Raw Protocol Requests
+
+Send custom MCP requests (`src/session.ts:456`):
+
+```typescript
+const result = await session.request('custom/method', {
+  customParam: 'value'
+});
+
+console.log('Custom response:', result);
+```
+
+### Request Options
+
+```typescript
+import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
+
+const abortController = new AbortController();
+
+const options: RequestOptions = {
+  timeout: 60000,
+  signal: abortController.signal,
+  onProgress: (progress) => {
+    console.log(`Progress: ${progress.progress}/${progress.total}`);
+    if (shouldCancel) {
+      abortController.abort();
+    }
+  }
+};
+
+try {
+  const result = await session.callTool('long-tool', {}, options);
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.log('Request cancelled');
+  }
+}
+```
+
+## Session Patterns
+
+### Session Pool
+
+Manage multiple sessions efficiently:
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+class SessionPool {
+  private client: MCPClient;
+  private sessions = new Map<string, MCPSession>();
+  
+  constructor(configPath: string) {
+    this.client = new MCPClient(configPath);
+  }
+  
+  async getSession(serverName: string): Promise<MCPSession> {
+    if (!this.sessions.has(serverName)) {
+      const session = await this.client.createSession(serverName);
+      this.sessions.set(serverName, session);
+    }
+    return this.sessions.get(serverName)!;
+  }
+  
+  async closeAll(): Promise<void> {
+    await this.client.closeAllSessions();
+    this.sessions.clear();
+  }
+}
+
+const pool = new SessionPool('./config.json');
+const fs = await pool.getSession('filesystem');
+const search = await pool.getSession('search');
+```
+
+### Lazy Initialization
+
+```typescript
+class LazySession {
+  private session: MCPSession | null = null;
+  
+  constructor(
+    private client: MCPClient,
+    private serverName: string
+  ) {}
+  
+  async get(): Promise<MCPSession> {
+    if (!this.session || !this.session.isConnected) {
+      this.session = await this.client.createSession(this.serverName);
+    }
+    return this.session;
+  }
+}
+
+const lazy = new LazySession(client, 'my-server');
+
+// Only connects when first accessed
+const session = await lazy.get();
+```
+
+### Session Reconnection
+
+```typescript
+class ReconnectingSession {
+  private session: MCPSession;
+  
+  constructor(
+    private client: MCPClient,
+    private serverName: string
+  ) {}
+  
+  async callTool(name: string, args: any): Promise<any> {
+    try {
+      if (!this.session?.isConnected) {
+        this.session = await this.client.createSession(this.serverName);
+      }
+      return await this.session.callTool(name, args);
+    } catch (error) {
+      // Retry once on connection error
+      console.log('Reconnecting...');
+      this.session = await this.client.createSession(this.serverName);
+      return await this.session.callTool(name, args);
+    }
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Check isConnected Before Operations">
+    Verify connection status before making requests:
+    
+    ```typescript
+    if (!session.isConnected) {
+      await session.connect();
+      await session.initialize();
+    }
+    
+    const tools = await session.listTools();
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Notification Lifecycles">
+    Clean up notification handlers to avoid memory leaks:
+    
+    ```typescript
+    const handler = (n: Notification) => {
+      console.log(n.method);
+    };
+    
+    session.on('notification', handler);
+    
+    // When done
+    await session.disconnect();
+    ```
+  </Accordion>
+
+  <Accordion title="Use Cached Data When Appropriate">
+    Avoid redundant server requests:
+    
+    ```typescript
+    // First call: fetches from server
+    const tools1 = await session.listTools();
+    
+    // Subsequent calls: use cached data
+    const tools2 = session.tools; // No server request
+    
+    // Refresh when notified
+    session.on('notification', async (n) => {
+      if (n.method === 'notifications/tools/list_changed') {
+        await session.listTools(); // Refresh cache
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Always Clean Up Sessions">
+    Properly disconnect to release resources:
+    
+    ```typescript
+    try {
+      const session = await client.createSession('server');
+      // Use session...
+    } finally {
+      await session.disconnect();
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="circle-nodes" href="/typescript/client/overview">
+    Understand client architecture and features
+  </Card>
+  <Card title="Configuration" icon="gear" href="/typescript/client/configuration">
+    Master configuration options
+  </Card>
+  <Card title="Connecting" icon="plug" href="/typescript/client/connecting">
+    Learn about connection methods
+  </Card>
+  <Card title="API Reference" icon="code" href="/typescript/api/client">
+    Complete API documentation
+  </Card>
+</CardGroup>

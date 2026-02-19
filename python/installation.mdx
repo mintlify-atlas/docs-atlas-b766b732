@@ -1,0 +1,133 @@
+---
+title: "Installation"
+description: "Install mcp-use for Python and get started"
+icon: "download"
+---
+
+## Package Installation
+
+Install mcp-use for Python using your preferred package manager:
+
+<CodeGroup>
+
+```bash pip
+pip install mcp-use
+```
+
+```bash poetry
+poetry add mcp-use
+```
+
+```bash uv
+uv add mcp-use
+```
+
+</CodeGroup>
+
+## Installing LangChain Providers
+
+mcp-use works with various LLM providers through LangChain. You'll need to install the appropriate LangChain provider package for your chosen LLM:
+
+<CodeGroup>
+
+```bash OpenAI
+pip install langchain-openai
+```
+
+```bash Anthropic
+pip install langchain-anthropic
+```
+
+```bash Google
+pip install langchain-google-genai
+```
+
+```bash Groq
+pip install langchain-groq
+```
+
+</CodeGroup>
+
+<Note>
+Only models with **tool calling capabilities** can be used with mcp-use. Make sure your chosen model supports function calling or tool use.
+</Note>
+
+For other providers, check the [LangChain chat models documentation](https://python.langchain.com/docs/integrations/chat/).
+
+## Optional Dependencies
+
+### Sandbox Execution (E2B)
+
+To use sandboxed execution for running MCP servers in isolated environments:
+
+```bash
+pip install "mcp-use[e2b]"
+```
+
+You'll also need an E2B API key. Sign up at [e2b.dev](https://e2b.dev) to get your API key.
+
+### Search Functionality
+
+For enhanced search capabilities:
+
+```bash
+pip install "mcp-use[search]"
+```
+
+### All Optional Dependencies
+
+To install everything:
+
+```bash
+pip install "mcp-use[dev,anthropic,openai,e2b,search]"
+```
+
+## Environment Setup
+
+Create a `.env` file with your API keys:
+
+```bash .env
+# LLM Provider Keys
+OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+GOOGLE_API_KEY=your_google_api_key
+
+# Optional: E2B for sandboxed execution
+E2B_API_KEY=your_e2b_api_key
+```
+
+## Requirements
+
+- **Python**: 3.11 or higher
+- **Operating System**: Linux, macOS, or Windows
+- **MCP Servers**: Access to MCP server implementations (npm-based or Python-based)
+
+## Verifying Installation
+
+Verify your installation by running:
+
+```python
+import mcp_use
+print(mcp_use.__version__)
+```
+
+## Installing from Source
+
+For development or to use the latest features:
+
+```bash
+git clone https://github.com/mcp-use/mcp-use.git
+cd mcp-use/libraries/python
+pip install -e ".[dev]"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/python/quickstart">
+    Get started with your first MCP agent
+  </Card>
+  <Card title="MCP Agent" icon="robot" href="/python/agent/overview">
+    Learn about building AI agents with MCP tools
+  </Card>
+</CardGroup>

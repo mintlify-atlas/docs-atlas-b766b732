@@ -1,0 +1,551 @@
+---
+title: 'Resources'
+description: 'Serve data to AI models'
+icon: 'database'
+---
+
+# Resources
+
+Resources provide read-only data that AI models can access. Unlike tools (which are called by models), resources are data sources that models can query.
+
+## Basic Resource
+
+Create a simple static resource:
+
+```typescript
+import { MCPServer, object } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+server.resource(
+  {
+    name: 'app-config',
+    uri: 'app://config',
+    title: 'Application Configuration',
+    description: 'Current application settings'
+  },
+  async () => {
+    return object({
+      version: '1.0.0',
+      environment: 'production',
+      features: ['auth', 'api', 'storage']
+    });
+  }
+);
+```
+
+## Resource Definition
+
+### Required Fields
+
+<ParamField path="name" type="string" required>
+  Unique identifier for the resource
+</ParamField>
+
+<ParamField path="uri" type="string" required>
+  URI pattern for accessing the resource (e.g., `app://config`, `file:///path`)
+</ParamField>
+
+### Optional Fields
+
+<ParamField path="title" type="string">
+  Human-readable display name
+</ParamField>
+
+<ParamField path="description" type="string">
+  What data this resource provides
+</ParamField>
+
+<ParamField path="mimeType" type="string">
+  Content type. Auto-inferred from response helpers if not provided.
+</ParamField>
+
+<ParamField path="annotations" type="ResourceAnnotations">
+  Metadata for discovery and presentation
+</ParamField>
+
+## Static Resources
+
+Serve fixed data:
+
+```typescript
+server.resource(
+  {
+    name: 'api-docs',
+    uri: 'docs://api',
+    title: 'API Documentation',
+    mimeType: 'text/markdown'
+  },
+  async () => {
+    return markdown(`
+# API Documentation
+
+## Endpoints
+
+### GET /api/users
+Returns list of users
+
+### POST /api/users
+Create a new user
+    `);
+  }
+);
+```
+
+## Dynamic Resources
+
+Generate data on-demand:
+
+```typescript
+server.resource(
+  {
+    name: 'system-stats',
+    uri: 'system://stats',
+    title: 'System Statistics'
+  },
+  async () => {
+    return object({
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage(),
+      timestamp: new Date().toISOString()
+    });
+  }
+);
+```
+
+## Resource Templates
+
+Create parameterized resources with URI templates:
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'user-profile',
+    uriTemplate: 'users://{userId}/profile',
+    title: 'User Profile',
+    description: 'User profile data',
+    mimeType: 'application/json'
+  },
+  async (uri, params) => {
+    const { userId } = params;
+    
+    // Fetch user from database
+    const user = await database.users.findOne({ id: userId });
+    
+    if (!user) {
+      return error(`User ${userId} not found`);
+    }
+    
+    return object({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt
+    });
+  }
+);
+```
+
+### Multiple Parameters
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'file-content',
+    uriTemplate: 'files://{folder}/{filename}',
+    title: 'File Content'
+  },
+  async (uri, params) => {
+    const { folder, filename } = params;
+    const path = `${folder}/${filename}`;
+    
+    try {
+      const content = await fs.readFile(path, 'utf-8');
+      return text(content);
+    } catch (err) {
+      return error(`File not found: ${path}`);
+    }
+  }
+);
+```
+
+## Response Types
+
+### JSON Data
+
+```typescript
+import { object } from 'mcp-use/server';
+
+server.resource(
+  { name: 'data', uri: 'app://data' },
+  async () => object({ key: 'value', items: [1, 2, 3] })
+);
+```
+
+### Plain Text
+
+```typescript
+import { text } from 'mcp-use/server';
+
+server.resource(
+  { name: 'log', uri: 'app://log' },
+  async () => text('Log content...')
+);
+```
+
+### Markdown
+
+```typescript
+import { markdown } from 'mcp-use/server';
+
+server.resource(
+  { name: 'readme', uri: 'docs://readme' },
+  async () => markdown('# Title\n\nContent...')
+);
+```
+
+### HTML
+
+```typescript
+import { html } from 'mcp-use/server';
+
+server.resource(
+  { name: 'page', uri: 'ui://page' },
+  async () => html('<h1>Hello</h1><p>World</p>')
+);
+```
+
+### Images
+
+```typescript
+import { image } from 'mcp-use/server';
+
+server.resource(
+  { name: 'logo', uri: 'assets://logo' },
+  async () => {
+    const data = await fs.readFile('./logo.png', 'base64');
+    return image(data, 'image/png');
+  }
+);
+```
+
+### Binary Data
+
+```typescript
+import { binary } from 'mcp-use/server';
+
+server.resource(
+  { name: 'file', uri: 'files://document.pdf' },
+  async () => {
+    const data = await fs.readFile('./doc.pdf', 'base64');
+    return binary(data, 'application/pdf');
+  }
+);
+```
+
+## Context Access
+
+Access request context in resource callbacks:
+
+```typescript
+server.resource(
+  {
+    name: 'user-data',
+    uri: 'app://user'
+  },
+  async (ctx) => {
+    // OAuth user info
+    const user = ctx.auth.user;
+    
+    // HTTP request
+    const userAgent = ctx.req.header('user-agent');
+    
+    return object({
+      user,
+      requestedFrom: userAgent
+    });
+  }
+);
+```
+
+## File Resources
+
+Serve files from disk:
+
+```typescript
+import { text } from 'mcp-use/server';
+import * as fs from 'fs/promises';
+
+server.resourceTemplate(
+  {
+    name: 'file',
+    uriTemplate: 'file:///{path}',
+    title: 'File Content'
+  },
+  async (uri, params) => {
+    const { path } = params;
+    
+    try {
+      const content = await fs.readFile(path, 'utf-8');
+      return text(content);
+    } catch (err) {
+      return error(`Cannot read file: ${err.message}`);
+    }
+  }
+);
+```
+
+## Database Resources
+
+Query databases:
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'database-table',
+    uriTemplate: 'db://{table}',
+    title: 'Database Table Data'
+  },
+  async (uri, params) => {
+    const { table } = params;
+    
+    // Validate table name to prevent SQL injection
+    const allowedTables = ['users', 'posts', 'comments'];
+    if (!allowedTables.includes(table)) {
+      return error(`Table not allowed: ${table}`);
+    }
+    
+    const data = await db.query(`SELECT * FROM ${table} LIMIT 100`);
+    return object({ table, rows: data });
+  }
+);
+```
+
+## API Resources
+
+Proxy external APIs:
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'github-repo',
+    uriTemplate: 'github://{owner}/{repo}',
+    title: 'GitHub Repository Info'
+  },
+  async (uri, params) => {
+    const { owner, repo } = params;
+    
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}`,
+      {
+        headers: {
+          'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+          'User-Agent': 'mcp-use-server'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      return error(`GitHub API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return object(data);
+  }
+);
+```
+
+## Resource Subscriptions
+
+Notify clients when resources change:
+
+```typescript
+import { sendNotification } from 'mcp-use/server';
+
+let cachedData = { value: 0 };
+
+server.resource(
+  {
+    name: 'live-data',
+    uri: 'app://live-data',
+    title: 'Live Data Stream'
+  },
+  async () => object(cachedData)
+);
+
+// Update data and notify subscribers
+setInterval(async () => {
+  cachedData.value++;
+  
+  // Notify all subscribed clients
+  await sendNotification({
+    method: 'notifications/resources/updated',
+    params: {
+      uri: 'app://live-data'
+    }
+  });
+}, 5000);
+```
+
+## Caching
+
+Implement caching for expensive resources:
+
+```typescript
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 60000; // 1 minute
+
+server.resource(
+  {
+    name: 'expensive-data',
+    uri: 'app://expensive'
+  },
+  async () => {
+    const cached = cache.get('expensive');
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return object(cached.data);
+    }
+    
+    // Expensive computation
+    const data = await computeExpensiveData();
+    
+    cache.set('expensive', {
+      data,
+      timestamp: Date.now()
+    });
+    
+    return object(data);
+  }
+);
+```
+
+## Error Handling
+
+### Not Found
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'item',
+    uriTemplate: 'items://{id}'
+  },
+  async (uri, params) => {
+    const item = await database.findItem(params.id);
+    
+    if (!item) {
+      return error(`Item ${params.id} not found`);
+    }
+    
+    return object(item);
+  }
+);
+```
+
+### Access Denied
+
+```typescript
+server.resource(
+  {
+    name: 'private-data',
+    uri: 'app://private'
+  },
+  async (ctx) => {
+    if (!ctx.auth) {
+      return error('Authentication required');
+    }
+    
+    if (!ctx.auth.user.roles.includes('admin')) {
+      return error('Admin access required');
+    }
+    
+    return object({ secret: 'data' });
+  }
+);
+```
+
+## Best Practices
+
+### 1. Clear URIs
+
+Use descriptive URI schemes:
+
+```typescript
+// Good
+uri: 'users://123/profile'
+uri: 'docs://api/v1/reference'
+uri: 'config://database/settings'
+
+// Less good
+uri: 'data://1'
+uri: 'resource://x'
+```
+
+### 2. Efficient Data
+
+Return only necessary data:
+
+```typescript
+// Good - selective fields
+return object({
+  id: user.id,
+  name: user.name,
+  email: user.email
+});
+
+// Bad - entire object with sensitive data
+return object(user);
+```
+
+### 3. Proper MIME Types
+
+Specify correct content types:
+
+```typescript
+// Good
+mimeType: 'application/json'  // for object()
+mimeType: 'text/markdown'     // for markdown()
+mimeType: 'text/html'         // for html()
+
+// These are auto-inferred when using helpers
+```
+
+### 4. Validation
+
+Validate template parameters:
+
+```typescript
+server.resourceTemplate(
+  { uriTemplate: 'users://{id}' },
+  async (uri, params) => {
+    const id = parseInt(params.id);
+    
+    if (isNaN(id) || id < 0) {
+      return error('Invalid user ID');
+    }
+    
+    // Use validated ID
+  }
+);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prompts" icon="message" href="/typescript/server/prompts">
+    Create prompt templates
+  </Card>
+  <Card title="Widgets" icon="window" href="/typescript/server/widgets">
+    Build interactive UIs
+  </Card>
+  <Card title="Notifications" icon="bell" href="/typescript/server/notifications">
+    Send real-time updates
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

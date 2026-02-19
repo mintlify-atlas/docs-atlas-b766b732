@@ -1,0 +1,296 @@
+---
+title: 'Quickstart'
+description: 'Get started with mcp-use in 5 minutes'
+icon: 'rocket'
+---
+
+# Quickstart Guide
+
+Get up and running with mcp-use in just a few minutes. This guide covers the three main use cases:
+
+1. **Building MCP Servers** - Expose tools, resources, and prompts
+2. **Using MCP Clients** - Connect to and use MCP servers
+3. **Creating MCP Agents** - Build AI agents that use MCP tools
+
+## 1. Building an MCP Server
+
+Create a simple MCP server with tools, resources, and prompts:
+
+```typescript server.ts
+import { MCPServer, text, object } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+// Register a tool
+server.tool(
+  {
+    name: 'add',
+    description: 'Add two numbers',
+    schema: z.object({
+      a: z.number(),
+      b: z.number()
+    })
+  },
+  async ({ a, b }) => {
+    return object({ result: a + b });
+  }
+);
+
+// Register a resource
+server.resource(
+  {
+    name: 'config',
+    uri: 'app://config',
+    title: 'App Configuration'
+  },
+  async () => {
+    return object({ theme: 'dark', version: '1.0' });
+  }
+);
+
+// Register a prompt
+server.prompt(
+  {
+    name: 'greeting',
+    description: 'Generate a greeting',
+    schema: z.object({
+      name: z.string()
+    })
+  },
+  async ({ name }) => {
+    return text(`Hello, ${name}! How can I help you today?`);
+  }
+);
+
+// Start the server
+await server.listen(3000);
+```
+
+Run it:
+
+```bash
+npx tsx server.ts
+```
+
+Your server is now running at `http://localhost:3000` with:
+- MCP endpoint at `/mcp`
+- Inspector UI at `http://localhost:3000`
+
+## 2. Using an MCP Client
+
+Connect to MCP servers and call their tools:
+
+```typescript client.ts
+import { MCPClient } from 'mcp-use/client';
+
+const client = new MCPClient({
+  mcpServers: {
+    'my-server': {
+      url: 'http://localhost:3000/mcp'
+    }
+  }
+});
+
+// Create a session
+const session = await client.createSession('my-server');
+
+// List available tools
+const tools = await session.listTools();
+console.log('Available tools:', tools);
+
+// Call a tool
+const result = await session.callTool('add', { a: 5, b: 3 });
+console.log('Result:', result);
+
+// Read a resource
+const config = await session.readResource('app://config');
+console.log('Config:', config);
+
+// Get a prompt
+const prompt = await session.getPrompt('greeting', { name: 'Alice' });
+console.log('Prompt:', prompt);
+
+// Clean up
+await client.close();
+```
+
+## 3. Creating an MCP Agent
+
+Build an AI agent that uses MCP tools:
+
+```typescript agent.ts
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    }
+  },
+  maxSteps: 10
+});
+
+// Run a query
+const result = await agent.run(
+  'List the top 5 files in the current directory'
+);
+
+console.log(result);
+
+// Clean up
+await agent.close();
+```
+
+<Note>
+You'll need `OPENAI_API_KEY` in your environment for the agent example.
+</Note>
+
+## Configuration File
+
+For complex setups, use a configuration file:
+
+```json mcp-config.json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "your-token-here"
+      }
+    },
+    "remote-server": {
+      "url": "https://api.example.com/mcp"
+    }
+  }
+}
+```
+
+Load it in your code:
+
+```typescript
+import { MCPClient } from 'mcp-use/client';
+
+const client = new MCPClient('./mcp-config.json');
+```
+
+## What's Next?
+
+Explore the documentation based on your use case:
+
+<CardGroup cols={2}>
+  <Card title="MCP Server Guide" icon="server" href="/typescript/server/overview">
+    Learn to build powerful MCP servers
+  </Card>
+  <Card title="MCP Client Guide" icon="plug" href="/typescript/client/overview">
+    Connect to and use MCP servers
+  </Card>
+  <Card title="MCP Agent Guide" icon="robot" href="/typescript/agent/overview">
+    Build intelligent AI agents
+  </Card>
+  <Card title="React Integration" icon="react" href="/typescript/apps/react-hooks">
+    Use MCP in React apps
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Stdio Servers (Local Processes)
+
+Connect to servers running as local processes:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    'my-server': {
+      command: 'node',
+      args: ['server.js'],
+      env: { NODE_ENV: 'production' }
+    }
+  }
+});
+```
+
+### HTTP Servers (Remote)
+
+Connect to servers over HTTP:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    'my-server': {
+      url: 'https://api.example.com/mcp',
+      headers: {
+        'Authorization': 'Bearer token'
+      }
+    }
+  }
+});
+```
+
+### WebSocket Servers
+
+Connect via WebSocket:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    'my-server': {
+      ws_url: 'wss://api.example.com/mcp'
+    }
+  }
+});
+```
+
+## Troubleshooting
+
+### "Module not found"
+
+Make sure you've installed mcp-use:
+
+```bash
+npm install mcp-use
+```
+
+### "Cannot find module" with TypeScript
+
+Check your `tsconfig.json` has correct module resolution:
+
+```json
+{
+  "compilerOptions": {
+    "moduleResolution": "NodeNext"
+  }
+}
+```
+
+### "OPENAI_API_KEY not found"
+
+Set your API key:
+
+```bash
+export OPENAI_API_KEY=your-key-here
+```
+
+Or use a `.env` file with a tool like `dotenv`.
+
+## Get Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/mcp-use/mcp-use/discussions">
+    Ask questions and get help
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples">
+    Browse example code
+  </Card>
+</CardGroup>

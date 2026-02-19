@@ -1,0 +1,790 @@
+---
+title: "Building MCP Apps"
+description: "Create interactive widgets that work across ChatGPT, Claude, and other MCP clients"
+icon: "mobile"
+---
+
+## What are MCP Apps?
+
+MCP Apps are MCP servers enhanced with **interactive UI widgets** that render in AI clients like ChatGPT and Claude Desktop. They combine backend functionality with frontend presentation in a single, unified codebase.
+
+<Note>
+  **Write once, run everywhere**: Your widgets work seamlessly across ChatGPT, Claude, and any MCP Apps-compatible client.
+</Note>
+
+## Quick Start
+
+The fastest way to create an MCP App:
+
+```bash
+npx create-mcp-use-app my-weather-app
+# Select: "MCP App with widgets"
+cd my-weather-app
+npm install
+npm run dev
+```
+
+This creates a project with:
+- Example server with tools
+- React widget components
+- Hot reload enabled
+- Auto-opening inspector
+
+## Project Structure
+
+```
+my-weather-app/
+├── src/
+│   └── server.ts          # MCP server definition
+├── resources/             # Widgets directory
+│   ├── weather-card/
+│   │   └── widget.tsx     # Weather widget
+│   └── forecast/
+│       └── widget.tsx     # Forecast widget
+├── package.json
+└── tsconfig.json
+```
+
+<Tip>
+  Widgets in the `resources/` directory are automatically discovered – no manual registration needed!
+</Tip>
+
+## Step-by-Step: Building a Weather App
+
+### Step 1: Create the Server
+
+Create `src/server.ts`:
+
+```typescript
+import { MCPServer, widget } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "weather-app",
+  version: "1.0.0",
+  description: "Interactive weather information app",
+});
+
+server.tool({
+  name: "show_weather",
+  description: "Display interactive weather widget for a city",
+  schema: z.object({
+    city: z.string().describe("City name"),
+  }),
+  widget: "weather-card",  // Links to resources/weather-card/widget.tsx
+}, async ({ city }) => {
+  // Fetch weather data (mock for example)
+  const weatherData = {
+    temperature: 72,
+    condition: "Sunny",
+    humidity: 65,
+    windSpeed: 10,
+    icon: "☀️",
+  };
+  
+  return widget({
+    props: {
+      city,
+      ...weatherData,
+    },
+    message: `Weather in ${city}: ${weatherData.condition}, ${weatherData.temperature}°F`,
+  });
+});
+
+await server.listen(3000);
+```
+
+### Step 2: Create the Widget
+
+Create `resources/weather-card/widget.tsx`:
+
+```tsx
+import { useWidget, type WidgetMetadata } from "mcp-use/react";
+import { z } from "zod";
+
+// Define prop schema
+const propSchema = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  condition: z.string(),
+  humidity: z.number(),
+  windSpeed: z.number(),
+  icon: z.string(),
+});
+
+// Export metadata for auto-discovery
+export const widgetMetadata: WidgetMetadata = {
+  description: "Display weather information with interactive elements",
+  props: propSchema,
+};
+
+// Widget component
+export default function WeatherCard() {
+  const { props, theme, isPending } = useWidget<z.infer<typeof propSchema>>();
+  
+  if (isPending) {
+    return <div style={{ padding: 20 }}>Loading weather...</div>;
+  }
+  
+  const isDark = theme === "dark";
+  
+  return (
+    <div
+      style={{
+        background: isDark ? "#1a1a2e" : "#f0f4ff",
+        borderRadius: 16,
+        padding: 24,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        color: isDark ? "#fff" : "#000",
+        maxWidth: 400,
+      }}
+    >
+      <div style={{ fontSize: 24, fontWeight: "bold", marginBottom: 8 }}>
+        {props.icon} {props.city}
+      </div>
+      
+      <div
+        style={{
+          fontSize: 48,
+          fontWeight: "bold",
+          marginBottom: 16,
+        }}
+      >
+        {props.temperature}°F
+      </div>
+      
+      <div style={{ fontSize: 20, marginBottom: 16, opacity: 0.8 }}>
+        {props.condition}
+      </div>
+      
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          fontSize: 14,
+        }}
+      >
+        <div>
+          <div style={{ opacity: 0.6 }}>Humidity</div>
+          <div style={{ fontWeight: 600 }}>{props.humidity}%</div>
+        </div>
+        <div>
+          <div style={{ opacity: 0.6 }}>Wind</div>
+          <div style={{ fontWeight: 600 }}>{props.windSpeed} mph</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### Step 3: Run and Test
+
+```bash
+npm run dev
+```
+
+This starts the development server with:
+- Hot reload for both server and widgets
+- Auto-opening inspector
+- Widget bundling with esbuild
+
+Open the inspector at http://localhost:3000/inspector and test the `show_weather` tool!
+
+## Advanced Features
+
+### Interactive Widgets
+
+Add interactivity by calling tools from your widget:
+
+```tsx
+import { useWidget } from "mcp-use/react";
+import { useState } from "react";
+
+export default function TaskManager() {
+  const { callTool, props } = useWidget<{ tasks: Task[] }>();
+  const [tasks, setTasks] = useState(props.tasks);
+  const [newTask, setNewTask] = useState("");
+  
+  const addTask = async () => {
+    const result = await callTool("create_task", {
+      title: newTask,
+      priority: "medium",
+    });
+    
+    if (result.success) {
+      setTasks([...tasks, result.task]);
+      setNewTask("");
+    }
+  };
+  
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Tasks</h2>
+      
+      <input
+        type="text"
+        value={newTask}
+        onChange={(e) => setNewTask(e.target.value)}
+        placeholder="New task..."
+        style={{
+          width: "100%",
+          padding: 8,
+          marginBottom: 12,
+          borderRadius: 4,
+          border: "1px solid #ccc",
+        }}
+      />
+      
+      <button
+        onClick={addTask}
+        style={{
+          padding: "8px 16px",
+          background: "#007bff",
+          color: "white",
+          border: "none",
+          borderRadius: 4,
+          cursor: "pointer",
+        }}
+      >
+        Add Task
+      </button>
+      
+      <ul style={{ marginTop: 16 }}>
+        {tasks.map((task) => (
+          <li key={task.id}>{task.title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+<Note>
+  The `callTool` function is automatically type-safe based on your server's tool definitions!
+</Note>
+
+### Streaming Props
+
+Update widget props in real-time:
+
+```typescript
+server.tool({
+  name: "process_data",
+  description: "Process data with live updates",
+  schema: z.object({ input: z.string() }),
+  widget: "progress-viewer",
+}, async ({ input }, { streamProps }) => {
+  streamProps?.({ status: "Starting...", progress: 0 });
+  
+  for (let i = 0; i <= 100; i += 10) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    streamProps?.({
+      status: `Processing: ${i}%`,
+      progress: i,
+    });
+  }
+  
+  streamProps?.({ status: "Complete!", progress: 100 });
+  
+  return widget({
+    props: { result: "Processing complete" },
+    message: "Data processed successfully",
+  });
+});
+```
+
+In your widget:
+
+```tsx
+export default function ProgressViewer() {
+  const { props } = useWidget<{
+    status: string;
+    progress: number;
+  }>();
+  
+  return (
+    <div>
+      <p>{props.status}</p>
+      <div style={{ width: "100%", background: "#eee", borderRadius: 8 }}>
+        <div
+          style={{
+            width: `${props.progress}%`,
+            height: 24,
+            background: "#007bff",
+            borderRadius: 8,
+            transition: "width 0.3s",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+### Theme Support
+
+Adapt to dark/light themes:
+
+```tsx
+export default function ThemedWidget() {
+  const { theme } = useWidget();
+  const isDark = theme === "dark";
+  
+  return (
+    <div
+      style={{
+        background: isDark ? "#1a1a1a" : "#ffffff",
+        color: isDark ? "#ffffff" : "#000000",
+        padding: 20,
+      }}
+    >
+      <h2>Current theme: {theme}</h2>
+    </div>
+  );
+}
+```
+
+### Using External Libraries
+
+Install and use any React library:
+
+```bash
+npm install recharts
+```
+
+```tsx
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { useWidget } from "mcp-use/react";
+
+export default function ChartWidget() {
+  const { props } = useWidget<{ data: Array<{ x: number; y: number }> }>();
+  
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Data Visualization</h2>
+      <LineChart width={600} height={300} data={props.data}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="x" />
+        <YAxis />
+        <Tooltip />
+        <Line type="monotone" dataKey="y" stroke="#8884d8" />
+      </LineChart>
+    </div>
+  );
+}
+```
+
+## Widget Types
+
+mcp-use supports multiple widget approaches:
+
+### 1. External URL (Iframe)
+
+Serve React widgets from your server:
+
+```typescript
+server.uiResource({
+  type: "externalUrl",
+  name: "dashboard",
+  widget: "dashboard",  // references resources/dashboard/widget.tsx
+  title: "Dashboard",
+  description: "Interactive dashboard",
+});
+```
+
+### 2. Raw HTML
+
+Simple HTML widgets without React:
+
+```typescript
+server.uiResource({
+  type: "rawHtml",
+  name: "welcome",
+  htmlContent: `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: sans-serif; padding: 20px; }
+          h1 { color: #007bff; }
+        </style>
+      </head>
+      <body>
+        <h1>Welcome!</h1>
+        <p>This is a simple HTML widget.</p>
+      </body>
+    </html>
+  `,
+});
+```
+
+### 3. Remote DOM (MCP-UI)
+
+Interactive components using MCP-UI:
+
+```typescript
+server.uiResource({
+  type: "remoteDom",
+  name: "button-widget",
+  script: `
+    const button = document.createElement('ui-button');
+    button.setAttribute('label', 'Click Me');
+    button.addEventListener('click', () => {
+      alert('Button clicked!');
+    });
+    root.appendChild(button);
+  `,
+  framework: "react",
+});
+```
+
+## Cross-Platform Compatibility
+
+Widgets work across multiple clients:
+
+### ChatGPT
+
+Uses the Apps SDK protocol (`text/html+skybridge`):
+
+```typescript
+server.tool({
+  name: "show_widget",
+  widget: "my-widget",
+  // ...
+});
+// Automatically generates ChatGPT-compatible metadata
+```
+
+### Claude Desktop
+
+Supports MCP Apps Extension (SEP-1865):
+
+```typescript
+// Same code works with Claude!
+// mcp-use handles protocol differences automatically
+```
+
+### Universal Widgets
+
+Use `mcpApps` type for maximum compatibility:
+
+```typescript
+server.uiResource({
+  type: "mcpApps",  // Works with both ChatGPT and MCP Apps clients
+  name: "universal-widget",
+  widget: "universal",
+  metadata: {
+    csp: {
+      connectDomains: ["https://api.example.com"],
+      resourceDomains: ["https://cdn.example.com"],
+    },
+    prefersBorder: true,
+    autoResize: true,
+  },
+});
+```
+
+## Development Workflow
+
+### Development Mode
+
+```bash
+npm run dev
+```
+
+Features:
+- Hot reload for server changes
+- Instant widget updates
+- Auto-opening inspector
+- Source maps for debugging
+
+### Production Build
+
+```bash
+npm run build
+npm start
+```
+
+Optimizations:
+- Minified widget bundles
+- Tree-shaking
+- Production React build
+- Optimized server code
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Widget Design">
+    퉰5 **Do:**
+    - Keep widgets focused and simple
+    - Support both light and dark themes
+    - Handle loading states gracefully
+    - Provide clear error messages
+    - Test in both ChatGPT and Claude
+    
+    ❌ **Don't:**
+    - Create overly complex widgets
+    - Assume specific client features
+    - Ignore loading/error states
+    - Use client-specific APIs
+  </Accordion>
+  
+  <Accordion title="Performance">
+    - Minimize widget bundle size
+    - Use lazy loading for heavy components
+    - Optimize images and assets
+    - Avoid unnecessary re-renders
+    - Cache expensive computations
+  </Accordion>
+  
+  <Accordion title="Type Safety">
+    ```typescript
+    // Always define prop schemas
+    const propSchema = z.object({
+      title: z.string(),
+      count: z.number(),
+    });
+    
+    // Use inferred types
+    type Props = z.infer<typeof propSchema>;
+    const { props } = useWidget<Props>();
+    ```
+  </Accordion>
+  
+  <Accordion title="Accessibility">
+    - Use semantic HTML
+    - Provide alt text for images
+    - Ensure keyboard navigation
+    - Use ARIA labels when needed
+    - Test with screen readers
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example: Todo App
+
+<Accordion title="View Complete Todo App Code">
+
+**Server (`src/server.ts`):**
+
+```typescript
+import { MCPServer, widget, object } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "todo-app",
+  version: "1.0.0",
+});
+
+let todos: Array<{ id: number; text: string; done: boolean }> = [
+  { id: 1, text: "Build MCP App", done: false },
+  { id: 2, text: "Test in ChatGPT", done: false },
+];
+
+server.tool({
+  name: "show_todos",
+  description: "Display todo list widget",
+  schema: z.object({}),
+  widget: "todo-list",
+}, async () => {
+  return widget({
+    props: { todos },
+    message: `You have ${todos.filter(t => !t.done).length} tasks remaining`,
+  });
+});
+
+server.tool({
+  name: "create_task",
+  description: "Create a new task",
+  schema: z.object({
+    text: z.string(),
+  }),
+}, async ({ text }) => {
+  const newTodo = {
+    id: Date.now(),
+    text,
+    done: false,
+  };
+  todos.push(newTodo);
+  return object({ success: true, task: newTodo });
+});
+
+server.tool({
+  name: "toggle_task",
+  description: "Toggle task completion",
+  schema: z.object({
+    id: z.number(),
+  }),
+}, async ({ id }) => {
+  const todo = todos.find(t => t.id === id);
+  if (todo) {
+    todo.done = !todo.done;
+    return object({ success: true, task: todo });
+  }
+  return object({ success: false, error: "Task not found" });
+});
+
+await server.listen(3000);
+```
+
+**Widget (`resources/todo-list/widget.tsx`):**
+
+```tsx
+import { useWidget, type WidgetMetadata } from "mcp-use/react";
+import { useState } from "react";
+import { z } from "zod";
+
+const propSchema = z.object({
+  todos: z.array(z.object({
+    id: z.number(),
+    text: z.string(),
+    done: z.boolean(),
+  })),
+});
+
+export const widgetMetadata: WidgetMetadata = {
+  description: "Interactive todo list",
+  props: propSchema,
+};
+
+export default function TodoList() {
+  const { props, callTool, theme } = useWidget<z.infer<typeof propSchema>>();
+  const [todos, setTodos] = useState(props.todos);
+  const [newTask, setNewTask] = useState("");
+  const isDark = theme === "dark";
+  
+  const addTask = async () => {
+    if (!newTask.trim()) return;
+    
+    const result = await callTool("create_task", { text: newTask });
+    if (result.success) {
+      setTodos([...todos, result.task]);
+      setNewTask("");
+    }
+  };
+  
+  const toggleTask = async (id: number) => {
+    const result = await callTool("toggle_task", { id });
+    if (result.success) {
+      setTodos(todos.map(t => 
+        t.id === id ? { ...t, done: !t.done } : t
+      ));
+    }
+  };
+  
+  return (
+    <div
+      style={{
+        background: isDark ? "#1a1a2e" : "#f8f9fa",
+        color: isDark ? "#fff" : "#000",
+        padding: 24,
+        borderRadius: 12,
+        fontFamily: "system-ui",
+        maxWidth: 500,
+      }}
+    >
+      <h2 style={{ marginTop: 0 }}>Todo List</h2>
+      
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input
+          type="text"
+          value={newTask}
+          onChange={(e) => setNewTask(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && addTask()}
+          placeholder="Add a new task..."
+          style={{
+            flex: 1,
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: isDark ? "1px solid #333" : "1px solid #ddd",
+            background: isDark ? "#2a2a3e" : "#fff",
+            color: isDark ? "#fff" : "#000",
+          }}
+        />
+        <button
+          onClick={addTask}
+          style={{
+            padding: "8px 16px",
+            background: "#007bff",
+            color: "white",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
+          Add
+        </button>
+      </div>
+      
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        {todos.map((todo) => (
+          <li
+            key={todo.id}
+            onClick={() => toggleTask(todo.id)}
+            style={{
+              padding: "12px",
+              marginBottom: 8,
+              background: isDark ? "#2a2a3e" : "#fff",
+              borderRadius: 6,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              textDecoration: todo.done ? "line-through" : "none",
+              opacity: todo.done ? 0.6 : 1,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={todo.done}
+              readOnly
+              style={{ cursor: "pointer" }}
+            />
+            <span>{todo.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+</Accordion>
+
+## Deployment
+
+Deploy your MCP App to production:
+
+```bash
+# Build for production
+npm run build
+
+# Deploy to Manufact MCP Cloud
+npx @mcp-use/cli login
+npx @mcp-use/cli deploy
+```
+
+Or deploy to any Node.js hosting platform:
+
+- Vercel
+- Railway
+- Render
+- AWS/GCP/Azure
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Complete widget API documentation
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/server/ui">
+    Browse widget examples
+  </Card>
+  <Card title="Connecting Clients" icon="plug" href="/guides/connecting-to-servers">
+    Connect AI clients to your MCP App
+  </Card>
+  <Card title="Deploy" icon="rocket" href="https://manufact.com">
+    Deploy to Manufact MCP Cloud
+  </Card>
+</CardGroup>

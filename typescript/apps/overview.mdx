@@ -1,0 +1,320 @@
+---
+title: "MCP Apps Overview"
+description: "Build interactive widgets for ChatGPT and Claude Desktop using React"
+---
+
+# MCP Apps Overview
+
+MCP Apps is mcp-use's widget framework for building rich, interactive UI experiences inside AI assistants like ChatGPT and Claude Desktop. Write your widget once in React, and it works across both platforms automatically.
+
+## What are MCP Apps?
+
+MCP Apps (also called "widgets") are React components that render inside AI chat interfaces. They allow you to:
+
+- **Display structured data** with custom layouts and styling
+- **Create interactive controls** like buttons, forms, and carousels
+- **Call MCP tools** directly from the widget
+- **Manage persistent state** across conversation turns
+- **Support both ChatGPT and Claude Desktop** from a single codebase
+
+## Quick Example
+
+Here's a complete weather widget:
+
+```tsx weather-display/widget.tsx
+import { useWidget, McpUseProvider } from 'mcp-use/react'
+import { z } from 'zod'
+
+const propSchema = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  conditions: z.string()
+})
+
+export const widgetMetadata = {
+  description: 'Display weather information',
+  props: propSchema
+}
+
+type WeatherProps = z.infer<typeof propSchema>
+
+const WeatherDisplay = () => {
+  const { props } = useWidget<WeatherProps>()
+
+  return (
+    <McpUseProvider>
+      <div className="p-6 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+        <h2 className="text-2xl font-bold">{props.city}</h2>
+        <p className="text-4xl">{props.temperature}°C</p>
+        <p className="capitalize">{props.conditions}</p>
+      </div>
+    </McpUseProvider>
+  )
+}
+
+export default WeatherDisplay
+```
+
+## How Widgets Work
+
+### 1. Widget Definition
+
+Create a React component in your server's `resources/` directory:
+
+```
+my-server/
+├── resources/
+│   └── weather-display/
+│       └── widget.tsx      # Your React component
+└── index.ts               # Server configuration
+```
+
+### 2. Automatic Registration
+
+mcp-use automatically discovers widgets and registers them as MCP tools and resources:
+
+```typescript
+// No manual registration needed!
+// The widget is automatically available as:
+// - Tool: weather-display
+// - Resource: ui://widget/weather-display
+```
+
+### 3. Runtime Data Flow
+
+When the AI calls your tool:
+
+1. **Tool arguments** → Passed as `toolInput` to `useWidget`
+2. **Widget props** → Sent from server via `_meta["mcp-use/props"]`
+3. **Tool output** → Rendered HTML returned to AI assistant
+4. **Interactive updates** → Managed via `callTool()` and `setState()`
+
+## Widget Types
+
+### Apps SDK Widgets (ChatGPT only)
+
+Use `type: "appsSdk"` for ChatGPT-specific widgets:
+
+```typescript
+server.uiResource({
+  type: "appsSdk",
+  name: "my-widget",
+  htmlTemplate: `<!DOCTYPE html>...`,
+  appsSdkMetadata: {
+    "openai/widgetCSP": {
+      connect_domains: ["https://api.example.com"]
+    }
+  }
+})
+```
+
+### MCP Apps Widgets (Universal)
+
+Use `type: "mcpApps"` for widgets that work with both ChatGPT and Claude Desktop:
+
+```typescript
+server.uiResource({
+  type: "mcpApps",
+  name: "my-widget",
+  htmlTemplate: `<!DOCTYPE html>...`,
+  metadata: {
+    csp: {
+      connectDomains: ["https://api.example.com"],
+      resourceDomains: ["https://cdn.example.com"]
+    },
+    prefersBorder: true,
+    autoResize: true
+  }
+})
+```
+
+**Recommendation:** Use `mcpApps` for new widgets to support both platforms.
+
+## Key Features
+
+### React Hooks
+
+mcp-use provides specialized React hooks for widget development:
+
+- **`useWidget`** - Access widget props, state, and platform APIs
+- **`useCallTool`** - Call MCP tools with state management
+- **`useMcp`** - Connect to MCP servers from client-side apps
+
+See [React Hooks](/typescript/apps/react-hooks) for details.
+
+### Theming
+
+Automatic dark/light mode support with Tailwind CSS:
+
+```tsx
+<div className="bg-white dark:bg-gray-800">
+  <h1 className="text-gray-900 dark:text-white">Hello</h1>
+</div>
+```
+
+The theme automatically adapts to the user's preference in ChatGPT or Claude.
+
+See [Theming](/typescript/apps/theming) for details.
+
+### State Management
+
+Persistent state across conversation turns:
+
+```tsx
+const { state, setState } = useWidget<{ favorites: string[] }>()
+
+const addFavorite = (city: string) => {
+  setState(prev => ({
+    favorites: [...(prev?.favorites || []), city]
+  }))
+}
+```
+
+### Tool Calls
+
+Call other MCP tools from your widget:
+
+```tsx
+const { callTool } = useWidget()
+
+const handleRefresh = async () => {
+  await callTool('get-weather', { city: 'Tokyo' })
+}
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│         AI Assistant (ChatGPT/Claude)       │
+│                                             │
+│  ┌───────────────────────────────────────┐ │
+│  │                                       │ │
+│  │     Your React Widget (iframe)       │ │
+│  │                                       │ │
+│  │   useWidget() ──► window.openai      │ │
+│  │   useCallTool() ──► MCP Protocol     │ │
+│  │                                       │ │
+│  └───────────────────────────────────────┘ │
+│                    │                        │
+└────────────────────┼────────────────────────┘
+                     │ HTTP/SSE
+                     ▼
+┌─────────────────────────────────────────────┐
+│            Your MCP Server                  │
+│                                             │
+│  server.tool('weather', handler)           │
+│  server.uiResource({ type: 'mcpApps' })    │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+## Development Workflow
+
+### 1. Create Widget Component
+
+```bash
+mkdir -p resources/my-widget
+touch resources/my-widget/widget.tsx
+```
+
+### 2. Define Widget Metadata
+
+```tsx
+export const widgetMetadata = {
+  description: 'Widget description for AI',
+  props: z.object({ /* ... */ })
+}
+```
+
+### 3. Run Development Server
+
+```bash
+npm run dev
+# or
+mcp-use dev
+```
+
+Widgets auto-reload with Hot Module Replacement (HMR).
+
+### 4. Test in AI Assistant
+
+Connect your server to ChatGPT or Claude Desktop and test the widget in a conversation.
+
+## Widget Options
+
+### Auto-Expose as Tool
+
+By default, widgets are automatically registered as tools:
+
+```tsx
+export const widgetMetadata = {
+  description: 'My widget',
+  props: propSchema,
+  exposeAsTool: true // default
+}
+```
+
+Disable auto-registration to use the widget only with custom tools:
+
+```tsx
+export const widgetMetadata = {
+  description: 'My widget',
+  props: propSchema,
+  exposeAsTool: false // Use with custom tools only
+}
+```
+
+### Custom Tool Configuration
+
+Use widgets with custom tools:
+
+```typescript
+server.tool({
+  name: 'get-weather',
+  description: 'Get current weather',
+  schema: z.object({ city: z.string() }),
+  widget: {
+    name: 'weather-display',
+    invoking: 'Fetching weather...',
+    invoked: 'Weather loaded'
+  }
+}, async ({ city }) => {
+  const data = await fetchWeather(city)
+  return widget({
+    props: { city, ...data },
+    message: `Weather for ${city}`
+  })
+})
+```
+
+## Platform Support
+
+| Feature | ChatGPT | Claude Desktop |
+|---------|---------|----------------|
+| Basic widgets | ✅ | ✅ |
+| Theming | ✅ | ✅ |
+| Tool calls | ✅ | ✅ |
+| State management | ✅ | ⚠️ Local only |
+| Follow-up messages | ✅ | ✅ |
+| External links | ✅ | ✅ |
+| Display modes | ✅ | ✅ |
+| Auto-resize | ❌ | ✅ |
+| Container dimensions | Partial | ✅ |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Widgets" icon="wand-magic-sparkles" href="/typescript/apps/creating-widgets">
+    Step-by-step guide to building your first widget
+  </Card>
+  <Card title="React Hooks" icon="react" href="/typescript/apps/react-hooks">
+    Learn about useWidget, useCallTool, and useMcp
+  </Card>
+  <Card title="Theming" icon="palette" href="/typescript/apps/theming">
+    Style widgets with dark mode and Tailwind CSS
+  </Card>
+  <Card title="ChatGPT Integration" icon="openai" href="/typescript/apps/chatgpt-integration">
+    Deploy widgets to ChatGPT
+  </Card>
+</CardGroup>

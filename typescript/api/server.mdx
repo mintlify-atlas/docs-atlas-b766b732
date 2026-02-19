@@ -1,0 +1,471 @@
+---
+title: "MCPServer API Reference"
+description: "Complete MCPServer class API documentation for building MCP servers"
+icon: "server"
+---
+
+## MCPServer
+
+The `MCPServer` class provides a complete MCP (Model Context Protocol) server implementation built on the Hono web framework. It combines MCP protocol handling with HTTP server capabilities, making it easy to build tools, resources, and prompts accessible by MCP clients.
+
+### Constructor
+
+```typescript
+import { MCPServer } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  description: 'My MCP server',
+  oauth: oauthSupabaseProvider(),
+  sessionStore: new InMemorySessionStore(),
+  streamManager: new InMemoryStreamManager()
+});
+```
+
+<ParamField path="name" type="string" required>
+  Server name for identification (appears in MCP clients)
+</ParamField>
+
+<ParamField path="version" type="string" required>
+  Server version string (semantic versioning recommended)
+</ParamField>
+
+<ParamField path="description" type="string">
+  Human-readable description of the server's purpose
+</ParamField>
+
+<ParamField path="instructions" type="string">
+  Instructions for AI models on how to use the server
+</ParamField>
+
+<ParamField path="oauth" type="OAuthProvider">
+  OAuth provider for authentication (Supabase, Auth0, Keycloak, WorkOS, or custom)
+</ParamField>
+
+<ParamField path="sessionStore" type="SessionStore">
+  Session storage implementation (InMemorySessionStore, FileSystemSessionStore, or RedisSessionStore)
+</ParamField>
+
+<ParamField path="streamManager" type="StreamManager">
+  Stream manager for SSE connections (InMemoryStreamManager or RedisStreamManager)
+</ParamField>
+
+<ParamField path="icons" type="Array<{ src: string; mimeType?: string; sizes?: string[] }>">
+  Server icons for display in clients
+</ParamField>
+
+<ParamField path="favicon" type="string">
+  Favicon URL for inspector and documentation
+</ParamField>
+
+### Static Methods
+
+#### getPackageVersion()
+
+Get the mcp-use package version.
+
+```typescript
+const version = MCPServer.getPackageVersion();
+console.log(`Server version: ${version}`); // "1.13.2"
+```
+
+<ResponseField name="return" type="string">
+  The package version string (e.g., "1.13.2")
+</ResponseField>
+
+### Instance Methods
+
+#### tool()
+
+Register a tool that AI models can call.
+
+```typescript
+server.tool({
+  name: 'send-email',
+  description: 'Send an email to a recipient',
+  schema: z.object({
+    to: z.string().email(),
+    subject: z.string(),
+    body: z.string()
+  })
+}, async ({ to, subject, body }, ctx) => {
+  await sendEmail(to, subject, body);
+  return text(`Email sent to ${to}`);
+});
+```
+
+<ParamField path="definition" type="ToolDefinition">
+  Tool configuration object
+</ParamField>
+
+<ParamField path="definition.name" type="string" required>
+  Unique tool name (alphanumeric, hyphens, underscores)
+</ParamField>
+
+<ParamField path="definition.description" type="string" required>
+  Description of what the tool does (helps AI understand when to use it)
+</ParamField>
+
+<ParamField path="definition.schema" type="ZodSchema">
+  Zod schema for input validation (automatically generates JSON Schema)
+</ParamField>
+
+<ParamField path="definition.annotations" type="ToolAnnotations">
+  OpenAI-style annotations for tool behavior hints
+</ParamField>
+
+<ParamField path="definition.widget" type="WidgetConfig">
+  Widget configuration for visual display in clients
+</ParamField>
+
+<ParamField path="handler" type="ToolCallback">
+  Async function that implements the tool logic
+</ParamField>
+
+**Handler Signature:**
+
+```typescript
+type ToolCallback<TInput, TOutput> = (
+  args: TInput,
+  ctx: ToolContext
+) => Promise<CallToolResult | TypedCallToolResult<TOutput>>;
+```
+
+**Context Object (ctx):**
+
+- `ctx.auth` - OAuth user info (if authentication enabled)
+- `ctx.log(level, message)` - Logging with multiple levels
+- `ctx.sample(params)` - Call AI model for assistance
+- `ctx.elicit(params)` - Request additional input from user
+
+#### resource()
+
+Register a static resource that clients can read.
+
+```typescript
+server.resource({
+  uri: 'config://settings',
+  name: 'App Settings',
+  description: 'Application configuration',
+  mimeType: 'application/json'
+}, async () => {
+  return object({ theme: 'dark', version: '1.0' });
+});
+```
+
+<ParamField path="definition" type="ResourceDefinition" required>
+  Resource configuration object
+</ParamField>
+
+<ParamField path="definition.uri" type="string" required>
+  Unique URI identifier (e.g., "config://settings")
+</ParamField>
+
+<ParamField path="definition.name" type="string" required>
+  Human-readable resource name
+</ParamField>
+
+<ParamField path="definition.description" type="string">
+  Description of the resource content
+</ParamField>
+
+<ParamField path="definition.mimeType" type="string">
+  MIME type (e.g., "application/json", "text/plain")
+</ParamField>
+
+<ParamField path="handler" type="ReadResourceCallback">
+  Async function that returns the resource content
+</ParamField>
+
+#### resourceTemplate()
+
+Register a resource template for dynamic resources with URI parameters.
+
+```typescript
+server.resourceTemplate({
+  uriTemplate: 'user://profile/{userId}',
+  name: 'User Profile',
+  description: 'Get user profile by ID',
+  mimeType: 'application/json'
+}, async ({ userId }) => {
+  const user = await getUserById(userId);
+  return object(user);
+});
+```
+
+<ParamField path="definition" type="ResourceTemplateDefinition" required>
+  Resource template configuration
+</ParamField>
+
+<ParamField path="definition.uriTemplate" type="string" required>
+  URI template with parameters in curly braces (e.g., "user://{id}")
+</ParamField>
+
+<ParamField path="handler" type="ReadResourceTemplateCallback">
+  Async function receiving extracted URI parameters
+</ParamField>
+
+#### prompt()
+
+Register a prompt template for AI interactions.
+
+```typescript
+server.prompt({
+  name: 'code-review',
+  description: 'Review code for quality',
+  schema: z.object({
+    code: z.string(),
+    language: z.string()
+  })
+}, async ({ code, language }) => {
+  return {
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: `Review this ${language} code:\n\n${code}`
+        }
+      }
+    ]
+  };
+});
+```
+
+<ParamField path="definition" type="PromptDefinition" required>
+  Prompt configuration object
+</ParamField>
+
+<ParamField path="definition.name" type="string" required>
+  Unique prompt name
+</ParamField>
+
+<ParamField path="definition.description" type="string">
+  Description of the prompt's purpose
+</ParamField>
+
+<ParamField path="definition.schema" type="ZodSchema">
+  Zod schema for prompt arguments
+</ParamField>
+
+<ParamField path="handler" type="PromptCallback">
+  Function returning prompt messages or CallToolResult
+</ParamField>
+
+#### listen()
+
+Start the HTTP server and begin accepting connections.
+
+```typescript
+await server.listen({
+  port: 3000,
+  host: 'localhost'
+});
+console.log('Server running on http://localhost:3000');
+```
+
+<ParamField path="port" type="number" default="3000">
+  Port number to bind to
+</ParamField>
+
+<ParamField path="host" type="string" default="localhost">
+  Hostname to bind to
+</ParamField>
+
+<ParamField path="serverBaseUrl" type="string">
+  Public base URL for OAuth callbacks and widget URLs
+</ParamField>
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when server starts
+</ResponseField>
+
+#### getHandler()
+
+Get the Hono request handler for integration with serverless platforms.
+
+```typescript
+// Cloudflare Workers
+export default server.getHandler();
+
+// Vercel Edge Functions
+export const GET = server.getHandler();
+export const POST = server.getHandler();
+```
+
+<ResponseField name="return" type="HonoHandler">
+  Hono request handler compatible with Web standard Request/Response
+</ResponseField>
+
+### Properties
+
+#### app
+
+```typescript
+server.app.get('/health', (c) => c.json({ status: 'ok' }));
+```
+
+The underlying Hono application instance. Use this to add custom HTTP routes and middleware alongside MCP endpoints.
+
+<ResponseField name="type" type="Hono">
+  Hono application instance
+</ResponseField>
+
+#### nativeServer
+
+```typescript
+const tools = server.nativeServer._registeredTools;
+```
+
+Native MCP server instance from `@modelcontextprotocol/sdk`. Exposed for advanced use cases that need direct SDK access.
+
+<ResponseField name="type" type="OfficialMcpServer">
+  Official MCP SDK server instance
+</ResponseField>
+
+#### sessions
+
+```typescript
+for (const [sessionId, session] of server.sessions) {
+  console.log(`Active session: ${sessionId}`);
+}
+```
+
+Map of active client sessions. Each session represents a connected MCP client with its own server instance.
+
+<ResponseField name="type" type="Map<string, SessionData>">
+  Map of session IDs to session data
+</ResponseField>
+
+## Related Types
+
+### ServerConfig
+
+Complete server configuration interface:
+
+```typescript
+interface ServerConfig {
+  name: string;
+  version: string;
+  description?: string;
+  instructions?: string;
+  oauth?: OAuthProvider;
+  sessionStore?: SessionStore;
+  streamManager?: StreamManager;
+  icons?: Array<{ src: string; mimeType?: string; sizes?: string[] }>;
+  favicon?: string;
+}
+```
+
+### ToolContext
+
+Context object passed to tool handlers:
+
+```typescript
+interface ToolContext {
+  // OAuth user information (if authentication enabled)
+  auth?: AuthInfo;
+  
+  // Logging with multiple levels
+  log: (level: 'debug' | 'info' | 'warn' | 'error', message: string) => void;
+  
+  // Call AI model for assistance
+  sample: (params: SampleOptions) => Promise<CreateMessageResult>;
+  
+  // Request additional input from user
+  elicit: (params: ElicitOptions) => Promise<ElicitResult>;
+}
+```
+
+### AuthInfo
+
+OAuth authentication information:
+
+```typescript
+interface AuthInfo {
+  user: UserInfo;
+  scopes?: string[];
+}
+
+interface UserInfo {
+  userId: string;
+  email?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+```
+
+## Examples
+
+### Basic Server
+
+```typescript
+import { MCPServer, text } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'weather-server',
+  version: '1.0.0'
+});
+
+server.tool({
+  name: 'get-weather',
+  description: 'Get weather for a city',
+  schema: z.object({ city: z.string() })
+}, async ({ city }) => {
+  const weather = await fetchWeather(city);
+  return text(`Weather in ${city}: ${weather.temp}°C`);
+});
+
+await server.listen({ port: 3000 });
+```
+
+### Server with OAuth
+
+```typescript
+import { MCPServer, oauthSupabaseProvider, text } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'secure-server',
+  version: '1.0.0',
+  oauth: oauthSupabaseProvider({
+    projectId: process.env.SUPABASE_PROJECT_ID!,
+    jwtSecret: process.env.SUPABASE_JWT_SECRET
+  })
+});
+
+server.tool({
+  name: 'get-profile'
+}, async (args, ctx) => {
+  // ctx.auth contains authenticated user info
+  return text(`Hello, ${ctx.auth.user.email}`);
+});
+
+await server.listen({ port: 3000 });
+```
+
+### Serverless Deployment
+
+```typescript
+// Cloudflare Workers
+import { MCPServer, text } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'edge-server',
+  version: '1.0.0'
+});
+
+server.tool({
+  name: 'greet',
+  description: 'Greet a user'
+}, async () => text('Hello from the edge!'));
+
+export default server.getHandler();
+```
+
+## See Also
+
+- [MCPClient API](/typescript/api/client) - Client for connecting to servers
+- [Response Helpers](/typescript/api/response-helpers) - Helper functions for tool responses
+- [OAuth Providers](/typescript/api/oauth) - Authentication configuration

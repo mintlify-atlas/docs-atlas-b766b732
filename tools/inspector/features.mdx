@@ -1,0 +1,506 @@
+---
+title: 'Inspector Features'
+description: 'Comprehensive guide to testing tools, resources, prompts, elicitation, and chat functionality'
+icon: 'sparkles'
+---
+
+# Inspector Features
+
+The inspector provides five main tabs for comprehensive MCP server testing and debugging.
+
+## Tools Tab
+
+The Tools tab is your primary interface for testing MCP tools.
+
+### Browsing Tools
+
+All available tools are listed with:
+- **Name**: The tool identifier
+- **Description**: What the tool does
+- **Parameter Count**: Number of required/optional inputs
+- **Schema Preview**: Click to expand full JSON schema
+
+### Executing Tools
+
+<Steps>
+  <Step title="Select a Tool">
+    Click on any tool from the list to view its details.
+  </Step>
+
+  <Step title="View Schema">
+    The right panel shows the tool's JSON schema with:
+    - Parameter names and types
+    - Descriptions for each field
+    - Required vs optional fields
+    - Default values
+    - Validation rules
+  </Step>
+
+  <Step title="Enter Input">
+    Fill in the JSON input panel:
+
+    ```json
+    {
+      "city": "San Francisco",
+      "units": "celsius"
+    }
+    ```
+
+    <Tip>
+      The inspector validates your input in real-time against the schema.
+    </Tip>
+  </Step>
+
+  <Step title="Execute">
+    Click **"Execute"** to call the tool.
+  </Step>
+
+  <Step title="View Results">
+    Results appear with:
+    - Syntax-highlighted JSON output
+    - Execution duration
+    - HTTP status code
+    - Widget rendering (if applicable)
+  </Step>
+</Steps>
+
+### Widget Support
+
+The inspector fully supports both widget formats:
+
+<Tabs>
+  <Tab title="MCP-UI Widgets">
+    When a tool returns MCP-UI formatted content, the inspector renders it inline:
+
+    ```json
+    {
+      "content": [
+        {
+          "type": "ui",
+          "uiContent": {
+            "type": "div",
+            "children": [
+              {
+                "type": "text",
+                "text": "Weather: Sunny, 72°F"
+              }
+            ]
+          }
+        }
+      ]
+    }
+    ```
+
+    The inspector will render this as formatted UI instead of raw JSON.
+  </Tab>
+
+  <Tab title="OpenAI Apps SDK">
+    When a tool returns OpenAI Apps SDK widget URLs:
+
+    ```json
+    {
+      "content": [
+        {
+          "type": "resource",
+          "resource": {
+            "uri": "ui://widget/weather-display",
+            "mimeType": "text/html"
+          }
+        }
+      ]
+    }
+    ```
+
+    The inspector loads and renders the widget in an iframe with:
+    - Full interactivity
+    - Console logging
+    - Debug controls
+  </Tab>
+</Tabs>
+
+### Saved Tool Calls
+
+Save frequently used tool calls for quick access:
+
+<Steps>
+  <Step title="Execute a Tool">
+    Run any tool with your desired parameters.
+  </Step>
+
+  <Step title="Save Call">
+    Click the **"Save"** icon next to the execute button.
+  </Step>
+
+  <Step title="Name the Call">
+    Give it a descriptive name like "Test Weather SF" or "Create Demo Issue".
+  </Step>
+
+  <Step title="Replay Anytime">
+    Access saved calls from the dropdown menu and execute with one click.
+  </Step>
+</Steps>
+
+## Resources Tab
+
+Browse and test MCP resources provided by the server.
+
+### Viewing Resources
+
+Resources are displayed with:
+- **Name**: Resource identifier
+- **URI**: Full resource URI (e.g., `config://settings`)
+- **MIME Type**: Content type (JSON, text, binary, etc.)
+- **Description**: What the resource provides
+
+### Accessing Resources
+
+<CodeGroup>
+
+```json JSON Resource
+{
+  "name": "config",
+  "uri": "config://settings",
+  "mimeType": "application/json",
+  "content": {
+    "theme": "dark",
+    "language": "en"
+  }
+}
+```
+
+```text Text Resource
+uri: docs://readme
+mimeType: text/plain
+
+# Welcome to MCP Server
+This is a sample text resource.
+```
+
+```text Binary Resource
+uri: file://logo.png
+mimeType: image/png
+
+[Binary content not displayed]
+```
+
+</CodeGroup>
+
+### Resource Actions
+
+- **Copy URI**: Click to copy the full resource URI to clipboard
+- **Preview**: View resource content with syntax highlighting
+- **Download**: Download binary resources
+- **Refresh**: Reload resource content
+
+## Prompts Tab
+
+Test pre-configured prompts with argument templates.
+
+### Using Prompts
+
+<Steps>
+  <Step title="Select a Prompt">
+    Browse available prompts and click to select.
+  </Step>
+
+  <Step title="View Arguments">
+    The schema shows required and optional arguments:
+
+    ```json
+    {
+      "language": "python",
+      "code": "def hello(): print('world')"
+    }
+    ```
+  </Step>
+
+  <Step title="Fill Form">
+    Use the form interface to enter argument values:
+    - Text fields for strings
+    - Dropdowns for enums
+    - Checkboxes for booleans
+  </Step>
+
+  <Step title="Render">
+    Click **"Render"** to execute the prompt template.
+  </Step>
+
+  <Step title="Copy Output">
+    The rendered prompt text appears in the output panel. Click **"Copy"** to use in your LLM.
+  </Step>
+</Steps>
+
+### Example: Code Review Prompt
+
+<CodeGroup>
+
+```json Input
+{
+  "language": "typescript",
+  "code": "const x = 5; console.log(x);"
+}
+```
+
+```text Rendered Output
+Please review this TypeScript code for best practices:
+
+const x = 5; console.log(x);
+
+Check for:
+- Variable naming conventions
+- Type safety
+- Potential bugs
+- Code style
+```
+
+</CodeGroup>
+
+## Elicitation Tab
+
+Handle tool requests that require user input during execution.
+
+### What is Elicitation?
+
+Elicitation allows tools to request additional information from users mid-execution. This is useful for:
+- Confirmation dialogs
+- Form submissions
+- Multi-step workflows
+- User preferences
+
+### Responding to Elicitation
+
+<Steps>
+  <Step title="Execute Tool">
+    Run a tool that requires elicitation.
+  </Step>
+
+  <Step title="View Request">
+    The Elicitation tab shows pending requests with:
+    - Request description
+    - Required fields
+    - Field types and validation
+  </Step>
+
+  <Step title="Fill Form">
+    Supported field types:
+
+    <Tabs>
+      <Tab title="Text">
+        ```json
+        {
+          "type": "string",
+          "description": "Enter your name"
+        }
+        ```
+      </Tab>
+
+      <Tab title="Number">
+        ```json
+        {
+          "type": "number",
+          "description": "Enter quantity",
+          "minimum": 1,
+          "maximum": 100
+        }
+        ```
+      </Tab>
+
+      <Tab title="Boolean">
+        ```json
+        {
+          "type": "boolean",
+          "description": "Enable feature?"
+        }
+        ```
+      </Tab>
+
+      <Tab title="Single Select">
+        ```json
+        {
+          "type": "string",
+          "enum": ["small", "medium", "large"],
+          "description": "Select size"
+        }
+        ```
+      </Tab>
+
+      <Tab title="Multi Select">
+        ```json
+        {
+          "type": "array",
+          "items": {
+            "enum": ["red", "green", "blue"]
+          },
+          "description": "Select colors"
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Submit">
+    Choose an action:
+    - **Accept**: Submit form data and continue
+    - **Decline**: Reject the request
+    - **Cancel**: Abort the entire operation
+  </Step>
+
+  <Step title="Return to Tool">
+    After responding, jump back to the Tools tab to see the final result.
+  </Step>
+</Steps>
+
+## Chat Tab
+
+Test your MCP server with real LLM interactions using Bring Your Own Key (BYOK).
+
+### Setup
+
+<Steps>
+  <Step title="Configure API Key">
+    Click **"Configure API Key"** to open settings.
+  </Step>
+
+  <Step title="Select Provider">
+    Choose your LLM provider:
+    - OpenAI (GPT-4, GPT-3.5)
+    - Anthropic (Claude)
+    - Google (Gemini)
+  </Step>
+
+  <Step title="Choose Model">
+    Select the specific model:
+
+    <Tabs>
+      <Tab title="OpenAI">
+        - `gpt-4o`
+        - `gpt-4-turbo`
+        - `gpt-3.5-turbo`
+      </Tab>
+
+      <Tab title="Anthropic">
+        - `claude-3-5-sonnet-20241022`
+        - `claude-3-opus-20240229`
+        - `claude-3-haiku-20240307`
+      </Tab>
+
+      <Tab title="Google">
+        - `gemini-2.0-flash-exp`
+        - `gemini-1.5-pro`
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Enter API Key">
+    Paste your API key. It's stored locally in your browser.
+
+    <Warning>
+      Your API key never leaves your device. All LLM requests go directly from your browser to the provider.
+    </Warning>
+  </Step>
+
+  <Step title="Save Configuration">
+    Click **"Save"** to store settings.
+  </Step>
+</Steps>
+
+### Using Chat
+
+Once configured, test conversational flows:
+
+<Steps>
+  <Step title="Send Message">
+    Type a natural language query:
+
+    ```
+    What's the weather in San Francisco?
+    ```
+  </Step>
+
+  <Step title="Watch Tool Calls">
+    The chat interface shows:
+    - LLM reasoning
+    - Tool selection
+    - Arguments sent to tools
+    - Tool results
+    - Final response
+
+    All in real-time with visual indicators.
+  </Step>
+
+  <Step title="View Details">
+    Expand each tool call to see:
+    - Full JSON arguments
+    - Complete tool response
+    - Execution time
+    - Success/error status
+  </Step>
+
+  <Step title="Continue Conversation">
+    Send follow-up messages to test multi-turn interactions:
+
+    ```
+    What about New York?
+    ```
+  </Step>
+</Steps>
+
+### Chat Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Turn Conversations" icon="comments">
+    Test complex workflows with conversation history
+  </Card>
+  <Card title="Tool Call Inspection" icon="microscope">
+    See exactly how the LLM uses your tools
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Watch how the LLM recovers from tool errors
+  </Card>
+  <Card title="Streaming Responses" icon="signal-stream">
+    Real-time streaming for better UX testing
+  </Card>
+</CardGroup>
+
+### Example Chat Session
+
+<CodeGroup>
+
+```text User Message
+Create a new issue in Linear titled "Add dark mode"
+```
+
+```json Tool Call: search_teams
+{
+  "query": "engineering"
+}
+
+Result: [{"id": "team-123", "name": "Engineering"}]
+```
+
+```json Tool Call: create_issue
+{
+  "title": "Add dark mode",
+  "teamId": "team-123"
+}
+
+Result: {"success": true, "issueId": "ISS-456"}
+```
+
+```text Assistant Response
+I've created the issue "Add dark mode" in the Engineering team.
+You can view it at: https://linear.app/team/issue/ISS-456
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Usage" icon="terminal" href="/tools/inspector/cli">
+    Run inspector locally with command-line options
+  </Card>
+  <Card title="Self-Hosting" icon="server" href="/tools/inspector/self-hosting">
+    Deploy your own inspector instance
+  </Card>
+</CardGroup>

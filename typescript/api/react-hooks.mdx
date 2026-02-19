@@ -1,0 +1,546 @@
+---
+title: "React Hooks API Reference"
+description: "React hooks for building MCP-connected apps and widgets"
+icon: "react"
+---
+
+## Overview
+
+The React hooks API provides seamless integration between React applications and MCP servers. It includes hooks for connecting to servers, calling tools, and building interactive widgets.
+
+## Server Connection Hooks
+
+### useMcp()
+
+Connect to an MCP server from a React component.
+
+```typescript
+import { useMcp } from 'mcp-use/react';
+
+function MyComponent() {
+  const mcp = useMcp({
+    url: 'http://localhost:3000/mcp',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  
+  useEffect(() => {
+    if (mcp.state === 'ready') {
+      console.log('Connected!', mcp.tools);
+    }
+  }, [mcp.state]);
+}
+```
+
+<ParamField path="options" type="UseMcpOptions" required>
+  Connection configuration
+</ParamField>
+
+<ParamField path="options.url" type="string" required>
+  MCP server URL
+</ParamField>
+
+<ParamField path="options.enabled" type="boolean" default="true">
+  Whether to automatically connect
+</ParamField>
+
+<ParamField path="options.headers" type="Record<string, string>">
+  Custom HTTP headers (e.g., Authorization)
+</ParamField>
+
+<ParamField path="options.autoRetry" type="boolean" default="false">
+  Automatically retry on failure
+</ParamField>
+
+<ParamField path="options.autoReconnect" type="number | boolean" default="3000">
+  Auto-reconnect delay in ms (false to disable)
+</ParamField>
+
+<ParamField path="options.onSampling" type="(params) => Promise<CreateMessageResult>">
+  Callback for sampling requests
+</ParamField>
+
+<ParamField path="options.onElicitation" type="(params) => Promise<ElicitResult>">
+  Callback for elicitation requests
+</ParamField>
+
+<ParamField path="options.onNotification" type="(notification) => void">
+  Callback for server notifications
+</ParamField>
+
+<ResponseField name="return" type="UseMcpResult">
+  MCP connection state and methods
+</ResponseField>
+
+**Return Value:**
+
+```typescript
+interface UseMcpResult {
+  // Connection state
+  state: 'discovering' | 'pending_auth' | 'authenticating' | 'ready' | 'failed';
+  error?: string;
+  
+  // Server metadata
+  serverInfo?: {
+    name: string;
+    version: string;
+    description?: string;
+    icon?: string;
+  };
+  capabilities?: Record<string, any>;
+  
+  // Available primitives
+  tools: Tool[];
+  resources: Resource[];
+  prompts: Prompt[];
+  
+  // Methods
+  callTool(name: string, args?: Record<string, unknown>): Promise<CallToolResult>;
+  disconnect(): Promise<void>;
+  retry(): void;
+  authenticate(): Promise<void>;
+  
+  // Auth
+  authUrl?: string;
+  authTokens?: { access_token: string; expires_at?: number };
+  
+  // Debug
+  log: Array<{ level: string; message: string; timestamp: number }>;
+}
+```
+
+### useMcpClient()
+
+Access the MCP client context (used with McpClientProvider).
+
+```typescript
+import { useMcpClient, McpClientProvider } from 'mcp-use/react';
+
+function MyApp() {
+  return (
+    <McpClientProvider
+      servers={{
+        'weather': { url: 'http://localhost:3000/mcp' }
+      }}
+    >
+      <MyComponent />
+    </McpClientProvider>
+  );
+}
+
+function MyComponent() {
+  const { servers, connectServer } = useMcpClient();
+  
+  return (
+    <button onClick={() => connectServer('weather')}>
+      Connect
+    </button>
+  );
+}
+```
+
+<ResponseField name="return" type="McpClientContextType">
+  Client context with servers and methods
+</ResponseField>
+
+### useMcpServer()
+
+Access a specific server from the client context.
+
+```typescript
+import { useMcpServer } from 'mcp-use/react';
+
+function WeatherComponent() {
+  const weather = useMcpServer('weather');
+  
+  if (weather.state !== 'connected') {
+    return <div>Connecting...</div>;
+  }
+  
+  return (
+    <div>
+      <h2>Weather Tools</h2>
+      {weather.tools.map(tool => (
+        <div key={tool.name}>{tool.name}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+<ParamField path="serverName" type="string" required>
+  Name of the server from provider configuration
+</ParamField>
+
+<ResponseField name="return" type="McpServer">
+  Server state and methods
+</ResponseField>
+
+## Tool Calling Hook
+
+### useCallTool()
+
+Call MCP tools with TanStack Query-like state management.
+
+```typescript
+import { useCallTool } from 'mcp-use/react';
+
+function SearchComponent() {
+  const { callTool, callToolAsync, isPending, isSuccess, data, error } = 
+    useCallTool('search-flights');
+  
+  const handleSearch = () => {
+    // Fire-and-forget with callbacks
+    callTool(
+      { destination: 'NYC', date: '2024-12-25' },
+      {
+        onSuccess: (data) => console.log('Found flights:', data),
+        onError: (error) => console.error('Search failed:', error)
+      }
+    );
+  };
+  
+  const handleAsyncSearch = async () => {
+    // Promise-based
+    try {
+      const result = await callToolAsync({ destination: 'NYC' });
+      console.log(result.structuredContent);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  return (
+    <div>
+      <button onClick={handleSearch} disabled={isPending}>
+        Search
+      </button>
+      {isPending && <div>Searching...</div>}
+      {isSuccess && <div>Found {data?.structuredContent?.length} flights</div>}
+      {error && <div>Error: {error.message}</div>}
+    </div>
+  );
+}
+```
+
+<ParamField path="name" type="string | keyof ToolRegistry" required>
+  Tool name (auto-typed from ToolRegistry when using mcp-use dev)
+</ParamField>
+
+<ResponseField name="return" type="UseCallToolReturn<TArgs, TResponse>">
+  State and methods for calling the tool
+</ResponseField>
+
+**Return Value:**
+
+```typescript
+interface UseCallToolReturn<TArgs, TResponse> {
+  // State (discriminated union)
+  status: 'idle' | 'pending' | 'success' | 'error';
+  isIdle: boolean;
+  isPending: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  data?: TResponse;
+  error?: unknown;
+  
+  // Methods
+  callTool: CallToolFn<TArgs, TResponse>;
+  callToolAsync: CallToolAsyncFn<TArgs, TResponse>;
+}
+```
+
+**Side Effects:**
+
+```typescript
+interface SideEffects<TArgs, TResponse> {
+  onSuccess?: (data: TResponse, args: TArgs) => void;
+  onError?: (error: unknown, args: TArgs) => void;
+  onSettled?: (data: TResponse | undefined, error: unknown | undefined, args: TArgs) => void;
+}
+```
+
+## Widget Hooks
+
+### useWidget()
+
+Build interactive widgets with access to tool data and host context.
+
+```typescript
+import { useWidget } from 'mcp-use/react';
+
+function WeatherWidget() {
+  const {
+    props,           // Widget-only data
+    toolInput,       // Original tool arguments
+    output,          // Tool output (what model sees)
+    theme,           // 'light' or 'dark'
+    displayMode,     // 'inline' or 'fullscreen'
+    isPending,       // Tool still executing
+    isStreaming,     // Arguments being streamed
+    callTool,        // Call another tool
+    state,           // Persistent state
+    setState         // Update state
+  } = useWidget<
+    { temperature: number; conditions: string },  // Props
+    string,                                        // Output
+    {},                                            // Metadata
+    { favorites: string[] },                       // State
+    { city: string }                               // ToolInput
+  >();
+  
+  return (
+    <div data-theme={theme}>
+      <h1>{toolInput.city}</h1>
+      {isPending ? (
+        <div>Loading...</div>
+      ) : (
+        <div>
+          <div>{props.temperature}°C</div>
+          <div>{props.conditions}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+<ParamField path="defaultProps" type="TProps">
+  Default props for development preview
+</ParamField>
+
+<ResponseField name="return" type="UseWidgetResult<TProps, TOutput, TMetadata, TState, TToolInput>">
+  Widget context with data, theme, and methods
+</ResponseField>
+
+**Return Value:**
+
+```typescript
+interface UseWidgetResult<TProps, TOutput, TMetadata, TState, TToolInput> {
+  // Data
+  props: TProps;                      // Widget-only data
+  toolInput: TToolInput;              // Tool arguments
+  output: TOutput | null;             // Tool output
+  metadata: TMetadata | null;         // Response metadata
+  
+  // State
+  state: TState | null;
+  setState: (state: TState | ((prev: TState | null) => TState)) => Promise<void>;
+  
+  // Layout & Theme
+  theme: 'light' | 'dark';
+  displayMode: 'inline' | 'fullscreen';
+  safeArea: SafeArea;
+  maxHeight: number;
+  maxWidth?: number;
+  userAgent: UserAgent;
+  locale: string;
+  timeZone: string;
+  mcp_url: string;                    // Base MCP server URL
+  
+  // Status
+  isAvailable: boolean;               // Widget API available
+  isPending: boolean;                 // Tool executing
+  isStreaming: boolean;               // Args being streamed
+  partialToolInput: Partial<TToolInput> | null;
+  
+  // Actions
+  callTool(name: string, args: Record<string, unknown>): Promise<CallToolResponse>;
+  sendFollowUpMessage(prompt: string): Promise<void>;
+  openExternal(href: string): void;
+  requestDisplayMode(mode: 'inline' | 'fullscreen'): Promise<{ mode: 'inline' | 'fullscreen' }>;
+}
+```
+
+### useWidgetProps()
+
+Get just the widget props (most common use case).
+
+```typescript
+import { useWidgetProps } from 'mcp-use/react';
+
+function SimpleWidget() {
+  const props = useWidgetProps<{ temperature: number; city: string }>();
+  
+  return <div>{props.city}: {props.temperature}°C</div>;
+}
+```
+
+<ParamField path="defaultProps" type="TProps">
+  Default props for preview
+</ParamField>
+
+<ResponseField name="return" type="Partial<TProps>">
+  Widget props object
+</ResponseField>
+
+### useWidgetTheme()
+
+Get the current theme.
+
+```typescript
+import { useWidgetTheme } from 'mcp-use/react';
+
+function ThemedWidget() {
+  const theme = useWidgetTheme();
+  
+  return (
+    <div style={{ background: theme === 'dark' ? '#000' : '#fff' }}>
+      Content
+    </div>
+  );
+}
+```
+
+<ResponseField name="return" type="'light' | 'dark'">
+  Current theme
+</ResponseField>
+
+### useWidgetState()
+
+Manage persistent widget state.
+
+```typescript
+import { useWidgetState } from 'mcp-use/react';
+
+function FavoritesWidget() {
+  const [favorites, setFavorites] = useWidgetState<string[]>([]);
+  
+  const addFavorite = (city: string) => {
+    setFavorites(prev => [...(prev || []), city]);
+  };
+  
+  return (
+    <div>
+      <h2>Favorites</h2>
+      {favorites?.map(city => <div key={city}>{city}</div>)}
+    </div>
+  );
+}
+```
+
+<ParamField path="defaultState" type="TState">
+  Default state value
+</ParamField>
+
+<ResponseField name="return" type="readonly [TState | null, (state: TState | ((prev: TState | null) => TState)) => Promise<void>]">
+  State value and setter function
+</ResponseField>
+
+## Type Generation
+
+When using `mcp-use dev`, types are automatically generated in `.mcp-use/tool-registry.d.ts`:
+
+```typescript
+// .mcp-use/tool-registry.d.ts (auto-generated)
+declare module "mcp-use/react" {
+  interface ToolRegistry {
+    "search-flights": {
+      input: { destination: string; date: string };
+      output: { flights: Array<{ id: string; price: number }> };
+    };
+  }
+}
+```
+
+This enables full type safety in useCallTool:
+
+```typescript
+const { callTool, data } = useCallTool('search-flights');
+
+// TypeScript knows the input and output types
+callTool({ destination: 'NYC', date: '2024-12-25' });
+
+if (data) {
+  data.structuredContent.flights.forEach(f => {
+    console.log(f.price); // Fully typed!
+  });
+}
+```
+
+## Examples
+
+### Complete Widget Example
+
+```typescript
+import { useWidget } from 'mcp-use/react';
+import { useState } from 'react';
+
+interface WeatherProps {
+  temperature: number;
+  conditions: string;
+  forecast: Array<{ day: string; high: number; low: number }>;
+}
+
+function WeatherWidget() {
+  const {
+    props,
+    toolInput,
+    theme,
+    isPending,
+    callTool,
+    state,
+    setState
+  } = useWidget<WeatherProps, string, {}, { unit: 'C' | 'F' }, { city: string }>();
+  
+  const [loading, setLoading] = useState(false);
+  
+  const refreshWeather = async () => {
+    setLoading(true);
+    try {
+      await callTool('get-weather', { city: toolInput.city });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const toggleUnit = () => {
+    setState(prev => ({
+      unit: prev?.unit === 'C' ? 'F' : 'C'
+    }));
+  };
+  
+  if (isPending) {
+    return <div>Loading weather...</div>;
+  }
+  
+  const temp = state?.unit === 'F' 
+    ? (props.temperature * 9/5) + 32 
+    : props.temperature;
+  
+  return (
+    <div data-theme={theme}>
+      <h1>{toolInput.city}</h1>
+      <div className="current">
+        <div className="temp">
+          {temp.toFixed(1)}°{state?.unit || 'C'}
+        </div>
+        <div className="conditions">{props.conditions}</div>
+      </div>
+      
+      <div className="forecast">
+        {props.forecast.map(day => (
+          <div key={day.day}>
+            <div>{day.day}</div>
+            <div>{day.high}° / {day.low}°</div>
+          </div>
+        ))}
+      </div>
+      
+      <div className="actions">
+        <button onClick={refreshWeather} disabled={loading}>
+          Refresh
+        </button>
+        <button onClick={toggleUnit}>
+          °{state?.unit === 'F' ? 'C' : 'F'}
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+## See Also
+
+- [MCPServer API](/typescript/api/server) - Building MCP servers
+- [Response Helpers](/typescript/api/response-helpers) - Widget response helpers
+- [Building MCP Apps Guide](/guides/building-mcp-apps) - Complete widget guide

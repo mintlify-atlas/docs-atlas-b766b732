@@ -1,80 +1,361 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get started with mcp-use in minutes"
+icon: "rocket"
 ---
 
-## Get started in three steps
+## Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will help you create your first MCP server with mcp-use in both TypeScript and Python.
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Tabs>
+  <Tab title="TypeScript">
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+## TypeScript Quickstart
+
+### Prerequisites
+
+- Node.js 20.19.0 or higher
+- npm, yarn, or pnpm
+
+### Create Your First Server
+
+The fastest way to get started is using the project scaffolding tool:
+
+```bash
+npx create-mcp-use-app my-server
+cd my-server
+npm install
+npm run dev
+```
+
+<Tip>
+  The development server includes hot reload and auto-opens the inspector at `http://localhost:3000/inspector`
+</Tip>
+
+### Manual Setup
+
+If you prefer to set up manually:
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    npm install mcp-use zod
+    ```
+  </Step>
+  
+  <Step title="Create Your Server">
+    Create a file `server.ts`:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```typescript
+    import { MCPServer, text } from "mcp-use/server";
+    import { z } from "zod";
 
-### Step 2: Deploy your changes
+    const server = new MCPServer({
+      name: "my-server",
+      version: "1.0.0",
+    });
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    server.tool({
+      name: "get_weather",
+      description: "Get weather for a city",
+      schema: z.object({ city: z.string() }),
+    }, async ({ city }) => {
+      return text(`Temperature: 72°F, Condition: sunny, City: ${city}`);
+    });
+
+    await server.listen(3000);
+    // Inspector at http://localhost:3000/inspector
+    ```
+  </Step>
+  
+  <Step title="Run Your Server">
+    ```bash
+    npx tsx server.ts
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    Your server is now running!
+    - MCP endpoint: `http://localhost:3000/mcp`
+    - Inspector UI: `http://localhost:3000/inspector`
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+### Test Your Server
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Open the inspector at `http://localhost:3000/inspector` and try calling your tool:
 
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+```json
+{
+  "city": "San Francisco"
+}
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The inspector provides a web interface to test all your tools, resources, and prompts without writing any client code.
 </Note>
+
+### Add More Features
+
+<CodeGroup>
+
+```typescript Resources
+// Add a resource that provides static data
+server.resource({
+  name: "config",
+  uri: "app://config",
+  title: "Application Config",
+}, async () => {
+  return text(JSON.stringify({
+    version: "1.0.0",
+    features: ["weather", "search"]
+  }));
+});
+```
+
+```typescript Prompts
+// Add a prompt template
+server.prompt({
+  name: "weather_analysis",
+  description: "Analyze weather data",
+  schema: z.object({
+    city: z.string(),
+    days: z.number(),
+  }),
+}, async ({ city, days }) => {
+  return text(
+    `Provide a ${days}-day weather forecast analysis for ${city}`
+  );
+});
+```
+
+</CodeGroup>
+
+  </Tab>
+  
+  <Tab title="Python">
+    
+## Python Quickstart
+
+### Prerequisites
+
+- Python 3.11 or higher
+- pip
+
+### Installation
+
+<Steps>
+  <Step title="Install mcp-use">
+    ```bash
+    pip install mcp-use
+    ```
+  </Step>
+  
+  <Step title="Install LLM Provider">
+    Choose your preferred LLM provider:
+    
+    ```bash
+    # For OpenAI
+    pip install langchain-openai
+    
+    # For Anthropic
+    pip install langchain-anthropic
+    ```
+  </Step>
+  
+  <Step title="Set API Keys">
+    Create a `.env` file:
+    
+    ```bash
+    OPENAI_API_KEY=your_api_key
+    # or
+    ANTHROPIC_API_KEY=your_api_key
+    ```
+  </Step>
+</Steps>
+
+### Create an MCP Server
+
+```python
+from typing import Annotated
+from mcp.types import ToolAnnotations
+from pydantic import Field
+from mcp_use import MCPServer
+
+server = MCPServer(name="Weather Server", version="1.0.0")
+
+@server.tool(
+    name="get_weather",
+    description="Get current weather information for a location",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+)
+async def get_weather(
+    city: Annotated[str, Field(description="City name")],
+) -> str:
+    return f"Temperature: 72°F, Condition: sunny, City: {city}"
+
+# Start server with auto-inspector
+server.run(transport="streamable-http", port=8000)
+# Inspector at http://localhost:8000/inspector
+```
+
+### Build an MCP Agent
+
+Create an AI agent that connects to MCP servers:
+
+```python
+import asyncio
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+async def main():
+    load_dotenv()
+    
+    # Configure MCP servers
+    config = {
+        "mcpServers": {
+            "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest"],
+            }
+        }
+    }
+    
+    # Create client and agent
+    client = MCPClient.from_dict(config)
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client, max_steps=30)
+    
+    # Run a query
+    result = await agent.run(
+        "Find the best restaurant in San Francisco using Google Search"
+    )
+    print(f"Result: {result}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Streaming Agent Output
+
+Get real-time feedback from your agent:
+
+```python
+async for chunk in agent.stream("Find restaurants in Tokyo"):
+    print(chunk["messages"], end="", flush=True)
+```
+
+<Tip>
+  Streaming is ideal for building responsive UIs that show agent progress in real-time.
+</Tip>
+
+### Multi-Server Support
+
+Connect to multiple MCP servers simultaneously:
+
+```python
+config = {
+    "mcpServers": {
+        "airbnb": {
+            "command": "npx",
+            "args": ["-y", "@openbnb/mcp-server-airbnb"]
+        },
+        "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"]
+        }
+    }
+}
+
+client = MCPClient.from_dict(config)
+agent = MCPAgent(
+    llm=llm, 
+    client=client,
+    use_server_manager=True  # Enable smart server selection
+)
+
+result = await agent.run(
+    "Search for a place in Barcelona on Airbnb, "
+    "then find nearby restaurants using Google"
+)
+```
+
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Build Your First Server"
+    icon="server"
+    href="/guides/building-your-first-server"
+  >
+    Learn to build a complete MCP server with tools, resources, and prompts
+  </Card>
+  <Card
+    title="Create MCP Apps"
+    icon="mobile"
+    href="/guides/building-mcp-apps"
+  >
+    Build interactive widgets for ChatGPT and Claude
+  </Card>
+  <Card
+    title="Connect to Servers"
+    icon="plug"
+    href="/guides/connecting-to-servers"
+  >
+    Learn different ways to connect to MCP servers
+  </Card>
+  <Card
+    title="Build AI Agents"
+    icon="robot"
+    href="/guides/creating-agents"
+  >
+    Create intelligent agents that use MCP tools
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If port 3000 (TypeScript) or 8000 (Python) is already in use, specify a different port:
+    
+    ```typescript
+    await server.listen(3001);
+    ```
+    
+    ```python
+    server.run(transport="streamable-http", port=8001)
+    ```
+  </Accordion>
+  
+  <Accordion title="Module not found errors">
+    Make sure you've installed all dependencies:
+    
+    **TypeScript:**
+    ```bash
+    npm install mcp-use zod
+    ```
+    
+    **Python:**
+    ```bash
+    pip install mcp-use langchain-openai
+    ```
+  </Accordion>
+  
+  <Accordion title="TypeScript execution errors">
+    Use `tsx` to run TypeScript files directly:
+    
+    ```bash
+    npx tsx server.ts
+    ```
+    
+    Or compile first:
+    ```bash
+    npm run build
+    node dist/server.js
+    ```
+  </Accordion>
+</AccordionGroup>

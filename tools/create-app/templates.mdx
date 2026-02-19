@@ -1,0 +1,627 @@
+---
+title: 'Templates'
+description: 'Explore available templates for creating MCP applications'
+icon: 'layer-group'
+---
+
+# Templates
+
+Choose from three official templates or use any GitHub repository as a custom template.
+
+## Official Templates
+
+<CardGroup cols={3}>
+  <Card title="Starter" icon="rocket">
+    Full-featured with all examples
+  </Card>
+  <Card title="MCP Apps" icon="mobile">
+    OpenAI Apps SDK optimized
+  </Card>
+  <Card title="Blank" icon="file">
+    Minimal clean slate
+  </Card>
+</CardGroup>
+
+## Starter Template
+
+The **starter template** is a comprehensive starting point with examples of all MCP features.
+
+### Use Case
+
+Best for:
+- Learning MCP concepts
+- Exploring all features
+- Prototyping quickly
+- Building full-featured servers
+
+### What's Included
+
+<Tabs>
+  <Tab title="Tools">
+    Example tool implementations:
+
+    ```typescript src/index.ts
+    // Weather fetching tool
+    server.tool(
+      {
+        name: "fetch-weather",
+        description: "Fetch weather for a city",
+        schema: z.object({
+          city: z.string().describe("City name"),
+        }),
+      },
+      async ({ city }) => {
+        return text(`Weather in ${city}: Sunny, 72°F`);
+      }
+    );
+    ```
+  </Tab>
+
+  <Tab title="Resources">
+    Example resource definitions:
+
+    ```typescript src/index.ts
+    // Configuration resource
+    server.resource(
+      {
+        name: "config",
+        uri: "config://settings",
+        description: "Server configuration",
+      },
+      async () => object({
+        theme: "dark",
+        language: "en",
+      })
+    );
+    ```
+  </Tab>
+
+  <Tab title="Prompts">
+    Example prompt templates:
+
+    ```typescript src/index.ts
+    // Code review prompt
+    server.prompt(
+      {
+        name: "review-code",
+        description: "Review code for best practices",
+        schema: z.object({
+          language: z.string(),
+          code: z.string(),
+        }),
+      },
+      async ({ language, code }) => {
+        return text(`
+Reviewing ${language} code:
+
+${code}
+
+Check for:
+- Best practices
+- Security issues
+- Performance problems
+        `);
+      }
+    );
+    ```
+  </Tab>
+
+  <Tab title="Widgets">
+    Example React widgets:
+
+    ```tsx resources/display-weather.tsx
+    import React from "react";
+    import { useMcp } from "mcp-use/react";
+    import { z } from "zod";
+
+    const propSchema = z.object({
+      city: z.string(),
+      temperature: z.number(),
+    });
+
+    export const widgetMetadata = {
+      description: "Display weather information",
+      props: propSchema,
+    };
+
+    export default function WeatherDisplay() {
+      const { props } = useMcp<z.infer<typeof propSchema>>();
+
+      return (
+        <div className="p-4">
+          <h1 className="text-2xl font-bold">{props.city}</h1>
+          <p className="text-lg">{props.temperature}°F</p>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+<AccordionGroup>
+  <Accordion title="All MCP Features" icon="sparkles">
+    - Tools with Zod validation
+    - Resources (static and dynamic)
+    - Prompts with argument templates
+    - Both MCP-UI and OpenAI Apps SDK widgets
+  </Accordion>
+
+  <Accordion title="TypeScript" icon="code">
+    - Full type safety
+    - Proper tsconfig.json
+    - Type declarations included
+  </Accordion>
+
+  <Accordion title="Development Ready" icon="rocket">
+    - Hot reload configured
+    - Auto-opening inspector
+    - Example implementations
+    - Comprehensive README
+  </Accordion>
+</AccordionGroup>
+
+### Create with Starter
+
+```bash
+npx create-mcp-use-app my-project --template starter
+```
+
+## MCP Apps Template
+
+The **mcp-apps template** is optimized for OpenAI Apps SDK integration and ChatGPT compatibility.
+
+### Use Case
+
+Best for:
+- OpenAI ChatGPT integration
+- Apps SDK widgets
+- Ecommerce applications
+- ChatGPT-compatible UIs
+
+### What's Included
+
+<Tabs>
+  <Tab title="OpenAI Widgets">
+    Pre-built OpenAI-compatible widgets:
+
+    **1. Display Weather**
+    ```tsx resources/display-weather.tsx
+    // Weather card with theme support
+    import { useWidget } from 'mcp-use/react';
+
+    export default function DisplayWeather() {
+      const { props, theme } = useWidget();
+      // theme is 'dark' or 'light' from ChatGPT
+      return (
+        <div className={theme === 'dark' ? 'bg-gray-800' : 'bg-white'}>
+          {/* ... */}
+        </div>
+      );
+    }
+    ```
+
+    **2. Ecommerce Carousel**
+    ```tsx resources/ecommerce-carousel.tsx
+    // Product carousel with OpenAI SDK UI components
+    import { Card, Button } from '@openai/apps-sdk-ui';
+
+    export default function EcommerceCarousel() {
+      const { props, sendFollowUpMessage } = useWidget();
+
+      return (
+        <div className="carousel">
+          {props.products.map(product => (
+            <Card key={product.id}>
+              <img src={product.image} />
+              <h3>{product.name}</h3>
+              <Button onClick={() => sendFollowUpMessage(
+                `Tell me more about ${product.name}`
+              )}>
+                Learn More
+              </Button>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+    ```
+
+    **3. Product Search**
+    ```tsx resources/product-search-result.tsx
+    // Search results with filters
+    ```
+
+    **4. Store Locations Map**
+    ```tsx resources/stores-locations-map.tsx
+    // Interactive map showing store locations
+    ```
+
+    **5. Order Confirmation**
+    ```tsx resources/order-confirmation.tsx
+    // Order summary and confirmation
+    ```
+  </Tab>
+
+  <Tab title="Brand Info Tool">
+    Example API tool:
+
+    ```typescript src/index.ts
+    // Fruits API endpoint
+    server.get("/api/fruits", (c) => {
+      return c.json([
+        { fruit: "mango", color: "bg-[#FBF1E1]" },
+        { fruit: "apple", color: "bg-[#F9E7E4]" },
+        // ...
+      ]);
+    });
+
+    // Brand information tool
+    server.tool(
+      {
+        name: "get-brand-info",
+        description: "Get brand information",
+      },
+      async () => {
+        return object({
+          name: "mcp-use",
+          tagline: "Build MCP servers with UI widgets",
+          features: [
+            "Automatic widget registration",
+            "React component support",
+            "TypeScript support",
+          ],
+        });
+      }
+    );
+    ```
+  </Tab>
+
+  <Tab title="Theme Integration">
+    Theme detection from ChatGPT:
+
+    ```tsx
+    import { useWidget } from 'mcp-use/react';
+
+    export default function MyWidget() {
+      const { theme } = useWidget();
+      // theme is 'dark' or 'light'
+
+      return (
+        <div className={`
+          ${theme === 'dark' 
+            ? 'bg-gray-900 text-white' 
+            : 'bg-white text-gray-900'
+          }
+        `}>
+          Content adapts to ChatGPT theme
+        </div>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab title="Widget Capabilities">
+    Full Apps SDK features:
+
+    ```tsx
+    import { useWidget } from 'mcp-use/react';
+
+    export default function MyWidget() {
+      const { 
+        props,              // Validated widget props
+        theme,              // 'dark' | 'light'
+        callTool,           // Call MCP tools
+        sendFollowUpMessage, // Send message to chat
+      } = useWidget();
+
+      const handleClick = async () => {
+        // Call MCP tool
+        const result = await callTool('my-tool', {
+          param: 'value',
+        });
+
+        // Send follow-up message
+        sendFollowUpMessage(
+          `Tool returned: ${result.content}`
+        );
+      };
+
+      return <button onClick={handleClick}>Execute</button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+<AccordionGroup>
+  <Accordion title="OpenAI Apps SDK" icon="robot">
+    - Full ChatGPT compatibility
+    - Theme detection
+    - Official UI components
+    - Persistent state
+  </Accordion>
+
+  <Accordion title="Automatic Registration" icon="wand-magic-sparkles">
+    - Widgets auto-register from `resources/`
+    - Props schema validation
+    - Type-safe props
+  </Accordion>
+
+  <Accordion title="Ecommerce Examples" icon="shopping-cart">
+    - Product carousel
+    - Search with filters
+    - Store locator map
+    - Order confirmation
+  </Accordion>
+</AccordionGroup>
+
+### Create with MCP Apps
+
+```bash
+npx create-mcp-use-app my-project --template mcp-apps
+```
+
+## Blank Template
+
+The **blank template** provides a minimal starting point for custom projects.
+
+### Use Case
+
+Best for:
+- Custom implementations
+- Minimal dependencies
+- Learning from scratch
+- Specific use cases
+
+### What's Included
+
+<Tabs>
+  <Tab title="Server Only">
+    Minimal server setup:
+
+    ```typescript src/index.ts
+    import { MCPServer } from "mcp-use/server";
+
+    const server = new MCPServer({
+      name: "my-server",
+      version: "1.0.0",
+    });
+
+    // Add your tools, resources, and prompts here
+
+    server.listen(3000);
+    ```
+
+    No example implementations - clean slate.
+  </Tab>
+
+  <Tab title="Configuration">
+    Basic configuration files:
+
+    ```json package.json
+    {
+      "name": "my-mcp-server",
+      "version": "1.0.0",
+      "type": "module",
+      "scripts": {
+        "dev": "mcp-use dev",
+        "build": "mcp-use build",
+        "start": "mcp-use start"
+      },
+      "dependencies": {
+        "mcp-use": "^2.0.0"
+      },
+      "devDependencies": {
+        "@mcp-use/cli": "^2.0.0",
+        "typescript": "^5.0.0"
+      }
+    }
+    ```
+
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "strict": true,
+        "outDir": "./dist"
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Structure">
+    Minimal project structure:
+
+    ```
+    my-project/
+    ├── package.json
+    ├── tsconfig.json
+    ├── .gitignore
+    ├── README.md
+    ├── src/
+    │   └── index.ts        # Empty server
+    ├── public/            # Empty
+    └── resources/         # Empty
+    ```
+
+    Add your own implementations.
+  </Tab>
+</Tabs>
+
+### Features
+
+<AccordionGroup>
+  <Accordion title="Minimal Dependencies" icon="feather">
+    - Only essential packages
+    - No example code
+    - Clean starting point
+  </Accordion>
+
+  <Accordion title="Full CLI Support" icon="terminal">
+    - Dev server with hot reload
+    - Build and deployment scripts
+    - Inspector integration
+  </Accordion>
+</AccordionGroup>
+
+### Create with Blank
+
+```bash
+npx create-mcp-use-app my-project --template blank
+```
+
+## Custom GitHub Templates
+
+Use any GitHub repository as a template.
+
+### Syntax
+
+<CodeGroup>
+
+```bash Short Format
+npx create-mcp-use-app my-project --template owner/repo
+
+# Example:
+npx create-mcp-use-app my-project --template acme/mcp-template
+```
+
+```bash Full URL
+npx create-mcp-use-app my-project --template https://github.com/owner/repo
+
+# Example:
+npx create-mcp-use-app my-project --template https://github.com/acme/mcp-template
+```
+
+```bash With Branch
+npx create-mcp-use-app my-project --template owner/repo#branch-name
+
+# Example:
+npx create-mcp-use-app my-project --template acme/mcp-template#develop
+```
+
+</CodeGroup>
+
+### Requirements
+
+<Warning>
+  Git must be installed and available in your PATH to use GitHub templates.
+</Warning>
+
+<Steps>
+  <Step title="Public Repository">
+    Repository must be publicly accessible (or you must have access).
+  </Step>
+
+  <Step title="Valid Structure">
+    Repository should contain:
+    - `package.json`
+    - `src/` directory (or TypeScript files)
+    - Optional: `tsconfig.json`, `README.md`
+  </Step>
+
+  <Step title="Template Variables">
+    Files can include placeholders:
+    - `{{PROJECT_NAME}}` - Replaced with your project name
+    - `{{mcp-use_version}}` - Replaced with latest mcp-use version
+  </Step>
+</Steps>
+
+### Example Custom Template
+
+Create your own template repository:
+
+```json package.json
+{
+  "name": "{{PROJECT_NAME}}",
+  "version": "1.0.0",
+  "dependencies": {
+    "mcp-use": "{{mcp-use_version}}"
+  }
+}
+```
+
+```typescript src/index.ts
+// Your custom template code
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  name: "{{PROJECT_NAME}}",
+  version: "1.0.0",
+});
+
+// Your custom tools and resources
+
+server.listen(3000);
+```
+
+Users can then use:
+```bash
+npx create-mcp-use-app my-project --template your-org/your-template
+```
+
+## Template Comparison
+
+| Feature | Starter | MCP Apps | Blank |
+|---------|---------|----------|-------|
+| **Tools** | ✅ Examples | ✅ Brand info | ❌ None |
+| **Resources** | ✅ Examples | ❌ None | ❌ None |
+| **Prompts** | ✅ Examples | ❌ None | ❌ None |
+| **Widgets** | ✅ Both types | ✅ Apps SDK | ❌ None |
+| **Documentation** | ✅ Comprehensive | ✅ Apps-focused | ✅ Minimal |
+| **Dependencies** | Full | Medium | Minimal |
+| **Best For** | Learning | ChatGPT | Custom |
+
+## Choosing a Template
+
+<Steps>
+  <Step title="Learning?">
+    Use **starter** template:
+    ```bash
+    npx create-mcp-use-app my-project --template starter
+    ```
+    
+    See all features with examples.
+  </Step>
+
+  <Step title="Building for ChatGPT?">
+    Use **mcp-apps** template:
+    ```bash
+    npx create-mcp-use-app my-project --template mcp-apps
+    ```
+    
+    Get OpenAI Apps SDK integration.
+  </Step>
+
+  <Step title="Starting Fresh?">
+    Use **blank** template:
+    ```bash
+    npx create-mcp-use-app my-project --template blank
+    ```
+    
+    Build from scratch.
+  </Step>
+
+  <Step title="Have Custom Template?">
+    Use GitHub repository:
+    ```bash
+    npx create-mcp-use-app my-project --template owner/repo
+    ```
+    
+    Use your organization's template.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Customization" icon="sliders" href="/tools/create-app/customization">
+    Customize your generated project
+  </Card>
+  <Card title="CLI Commands" icon="terminal" href="/tools/cli/commands">
+    Learn about development commands
+  </Card>
+</CardGroup>

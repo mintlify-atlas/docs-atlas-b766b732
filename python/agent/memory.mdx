@@ -1,0 +1,107 @@
+---
+title: "Agent Memory"
+description: "Manage conversation history and context"
+icon: "database"
+---
+
+## Memory Overview
+
+MCPAgent maintains conversation history when `memory_enabled=True`, allowing the agent to remember previous interactions and maintain context across multiple queries.
+
+## Enabling Memory
+
+```python
+from mcp_use import MCPAgent, MCPClient
+from langchain_openai import ChatOpenAI
+
+client = MCPClient.from_config_file("config.json")
+llm = ChatOpenAI(model="gpt-4o")
+
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    memory_enabled=True  # Default
+)
+```
+
+## Using Memory
+
+```python
+# First query
+result1 = await agent.run("My name is Alice and I'm learning Python")
+
+# Second query - agent remembers
+result2 = await agent.run("What's my name?")
+print(result2)  # "Your name is Alice."
+
+# Third query - maintains context
+result3 = await agent.run("What am I learning?")
+print(result3)  # "You're learning Python."
+```
+
+## Managing History
+
+### Get Conversation History
+
+```python
+history = agent.get_conversation_history()
+for message in history:
+    print(f"{message.type}: {message.content}")
+```
+
+### Clear History
+
+```python
+agent.clear_conversation_history()
+```
+
+### Add Messages
+
+```python
+from langchain_core.messages import HumanMessage
+
+agent.add_to_history(HumanMessage(content="Custom message"))
+```
+
+## External History
+
+Use external conversation history:
+
+```python
+from langchain_core.messages import HumanMessage, AIMessage
+
+external_history = [
+    HumanMessage(content="Previous question"),
+    AIMessage(content="Previous answer")
+]
+
+result = await agent.run(
+    "Continue our conversation",
+    external_history=external_history
+)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Clear Between Tasks">
+    Reset context for unrelated tasks
+  </Accordion>
+  <Accordion title="Monitor Size">
+    Keep track of conversation length
+  </Accordion>
+  <Accordion title="External Storage">
+    Store important conversations externally
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Server Manager" icon="server" href="/python/agent/server-manager">
+    Dynamic server selection
+  </Card>
+  <Card title="Agent API" icon="book" href="/python/api/agent">
+    Agent API reference
+  </Card>
+</CardGroup>

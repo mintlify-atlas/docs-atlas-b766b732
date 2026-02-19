@@ -1,0 +1,504 @@
+---
+title: 'Streaming Responses'
+description: 'Real-time agent execution with stream() and streamEvents()'
+icon: 'broadcast-tower'
+---
+
+# Streaming Responses
+
+MCPAgent provides two streaming methods that give you real-time access to the agent's reasoning process, tool calls, and responses.
+
+## stream() - Agent Steps
+
+The `stream()` method yields intermediate agent steps, showing which tools are being called and their results.
+
+### Basic Streaming
+
+```typescript
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    }
+  }
+});
+
+const stream = agent.stream('List all TypeScript files and count them');
+
+for await (const step of stream) {
+  console.log('Tool:', step.action.tool);
+  console.log('Input:', step.action.toolInput);
+  console.log('Output:', step.observation);
+  console.log('---');
+}
+```
+
+Output:
+```
+Tool: list_directory
+Input: { path: "." }
+Output: ["src", "tests", "package.json", ...]
+---
+Tool: list_directory
+Input: { path: "./src" }
+Output: ["index.ts", "agent.ts", ...]
+---
+```
+
+### Capturing Final Result
+
+The stream's return value contains the final result:
+
+```typescript
+const stream = agent.stream('Find all TODO comments');
+
+let stepCount = 0;
+
+// Manually iterate to capture both steps and result
+while (true) {
+  const { done, value } = await stream.next();
+  
+  if (done) {
+    // value is the final result
+    console.log('\nFinal Result:', value);
+    break;
+  }
+  
+  // value is an AgentStep
+  stepCount++;
+  console.log(`\nStep ${stepCount}:`);
+  console.log(`  Tool: ${value.action.tool}`);
+  console.log(`  Input:`, value.action.toolInput);
+  console.log(`  Output: ${value.observation.slice(0, 100)}...`);
+}
+```
+
+### With Options Object
+
+```typescript
+const stream = agent.stream({
+  prompt: 'Complex task',
+  maxSteps: 20,
+  signal: AbortSignal.timeout(60000)
+});
+
+for await (const step of stream) {
+  // Process steps
+}
+```
+
+### Step Interface
+
+Each step has this structure:
+
+```typescript
+interface AgentStep {
+  action: {
+    tool: string;        // Tool name
+    toolInput: any;      // Tool parameters
+    log: string;         // Agent's reasoning
+  };
+  observation: string;   // Tool result
+}
+```
+
+## streamEvents() - Token-Level Streaming
+
+The `streamEvents()` method provides fine-grained access to every event in the agent execution, including token-by-token LLM output.
+
+### Basic Usage
+
+```typescript
+const eventStream = agent.streamEvents('Write a summary of the files');
+
+for await (const event of eventStream) {
+  switch (event.event) {
+    case 'on_chain_start':
+      if (event.name === 'AgentExecutor') {
+        console.log('Agent started');
+      }
+      break;
+      
+    case 'on_tool_start':
+      console.log(`Tool started: ${event.name}`);
+      console.log('Input:', event.data?.input);
+      break;
+      
+    case 'on_tool_end':
+      console.log(`Tool finished: ${event.name}`);
+      console.log('Output:', event.data?.output);
+      break;
+      
+    case 'on_chat_model_stream':
+      // Token-by-token streaming
+      const text = event.data?.chunk?.text;
+      if (text) {
+        process.stdout.write(text);
+      }
+      break;
+      
+    case 'on_chain_end':
+      console.log('Agent finished');
+      break;
+  }
+}
+```
+
+### Real-Time Token Display
+
+Stream LLM responses as they're generated:
+
+```typescript
+const eventStream = agent.streamEvents('Explain what this codebase does');
+
+let inTextGeneration = false;
+
+for await (const event of eventStream) {
+  if (event.event === 'on_chat_model_stream') {
+    if (!inTextGeneration) {
+      console.log('\nAssistant: ');
+      inTextGeneration = true;
+    }
+    
+    const text = event.data?.chunk?.text;
+    if (text) {
+      process.stdout.write(text);
+    }
+  }
+  
+  if (event.event === 'on_chain_end' && event.name === 'AgentExecutor') {
+    console.log('\n');
+    break;
+  }
+}
+```
+
+### Detailed Event Tracking
+
+Track all aspects of execution:
+
+```typescript examples/agent/advanced/stream_events_detailed.ts
+const eventStream = agent.streamEvents({
+  prompt: 'Analyze the project structure',
+  maxSteps: 15
+});
+
+let toolCallCount = 0;
+let tokenCount = 0;
+const startTime = Date.now();
+
+for await (const event of eventStream) {
+  switch (event.event) {
+    case 'on_tool_start':
+      toolCallCount++;
+      console.log(`\n[${new Date().toISOString()}] Tool Call ${toolCallCount}`);
+      console.log(`  Name: ${event.name}`);
+      console.log(`  Input:`, JSON.stringify(event.data?.input, null, 2));
+      break;
+      
+    case 'on_tool_end':
+      console.log(`  ✓ Completed in ${event.run_id}`);
+      const output = event.data?.output;
+      if (typeof output === 'string') {
+        console.log(`  Output: ${output.slice(0, 200)}...`);
+      }
+      break;
+      
+    case 'on_chat_model_stream':
+      const text = event.data?.chunk?.text;
+      if (text) {
+        tokenCount += text.length;
+        process.stdout.write(text);
+      }
+      break;
+      
+    case 'on_chain_end':
+      if (event.name === 'AgentExecutor') {
+        const duration = Date.now() - startTime;
+        console.log(`\n\nExecution Summary:`);
+        console.log(`  Duration: ${duration}ms`);
+        console.log(`  Tool Calls: ${toolCallCount}`);
+        console.log(`  Tokens Generated: ~${tokenCount}`);
+      }
+      break;
+      
+    case 'on_llm_error':
+      console.error('LLM Error:', event.data);
+      break;
+      
+    case 'on_tool_error':
+      console.error('Tool Error:', event.data);
+      break;
+  }
+}
+```
+
+## Event Types
+
+Common event types you'll encounter:
+
+| Event | Description |
+|-------|-------------|
+| `on_chain_start` | Agent execution begins |
+| `on_chain_end` | Agent execution completes |
+| `on_chat_model_start` | LLM call begins |
+| `on_chat_model_stream` | LLM token generated |
+| `on_chat_model_end` | LLM call completes |
+| `on_tool_start` | Tool execution begins |
+| `on_tool_end` | Tool execution completes |
+| `on_tool_error` | Tool execution fails |
+| `on_llm_error` | LLM call fails |
+
+## Practical Examples
+
+### Progress Indicator
+
+```typescript
+async function runWithProgress(query: string) {
+  const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let spinnerIndex = 0;
+  let currentTool: string | null = null;
+  
+  const interval = setInterval(() => {
+    if (currentTool) {
+      process.stdout.write(
+        `\r${spinner[spinnerIndex]} Running ${currentTool}...`
+      );
+      spinnerIndex = (spinnerIndex + 1) % spinner.length;
+    }
+  }, 80);
+  
+  try {
+    const stream = agent.stream(query);
+    
+    for await (const step of stream) {
+      currentTool = step.action.tool;
+      // Clear progress line and show completed step
+      process.stdout.write(`\r✓ ${step.action.tool} completed\n`);
+    }
+  } finally {
+    clearInterval(interval);
+    process.stdout.write('\r');
+  }
+}
+```
+
+### Live UI Updates
+
+```typescript
+import { useState } from 'react';
+
+function AgentChat() {
+  const [steps, setSteps] = useState<AgentStep[]>([]);
+  const [response, setResponse] = useState('');
+  
+  async function runQuery(query: string) {
+    setSteps([]);
+    setResponse('');
+    
+    const stream = agent.stream(query);
+    
+    for await (const step of stream) {
+      setSteps(prev => [...prev, step]);
+    }
+    
+    // Get final result
+    const result = await agent.run(query);
+    setResponse(result);
+  }
+  
+  return (
+    <div>
+      <h2>Agent Execution</h2>
+      
+      {steps.map((step, i) => (
+        <div key={i} className="step">
+          <strong>{step.action.tool}</strong>
+          <pre>{JSON.stringify(step.action.toolInput, null, 2)}</pre>
+          <p>{step.observation}</p>
+        </div>
+      ))}
+      
+      {response && (
+        <div className="final-response">
+          <strong>Final Response:</strong>
+          <p>{response}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Token Counter
+
+```typescript
+async function countTokens(query: string): Promise<number> {
+  let tokenCount = 0;
+  
+  const eventStream = agent.streamEvents(query);
+  
+  for await (const event of eventStream) {
+    if (event.event === 'on_chat_model_stream') {
+      const text = event.data?.chunk?.text;
+      if (text) {
+        // Rough token estimate: ~4 chars per token
+        tokenCount += Math.ceil(text.length / 4);
+      }
+    }
+  }
+  
+  return tokenCount;
+}
+
+const tokens = await countTokens('Explain this codebase');
+console.log(`Approximate tokens used: ${tokens}`);
+```
+
+### Error Handling
+
+```typescript
+try {
+  const stream = agent.stream({
+    prompt: 'Complex task',
+    signal: AbortSignal.timeout(30000)
+  });
+  
+  for await (const step of stream) {
+    console.log(`Tool: ${step.action.tool}`);
+    
+    // Check for errors in observations
+    if (step.observation.includes('Error:')) {
+      console.error('Tool failed:', step.observation);
+    }
+  }
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.error('Stream timed out');
+  } else {
+    console.error('Stream error:', error);
+  }
+}
+```
+
+## Performance Considerations
+
+### Memory Usage
+
+Streaming uses less memory than `run()` since you can process steps incrementally:
+
+```typescript
+// Process steps without storing them all
+let toolCount = 0;
+
+for await (const step of agent.stream(query)) {
+  toolCount++;
+  // Process step immediately without storing
+  await saveStepToDatabase(step);
+}
+
+console.log(`Processed ${toolCount} steps`);
+```
+
+### Network Efficiency
+
+For remote agents, streaming reduces latency by showing progress immediately:
+
+```typescript
+const stream = agent.stream({
+  prompt: 'Long-running analysis',
+  maxSteps: 30
+});
+
+console.log('Starting analysis...');
+
+for await (const step of stream) {
+  // User sees progress immediately
+  console.log(`[${new Date().toISOString()}] ${step.action.tool}`);
+}
+```
+
+## Complete Example
+
+```typescript examples/agent/advanced/stream_complete.ts
+import { MCPAgent } from 'mcp-use/agent';
+
+async function main() {
+  const agent = new MCPAgent({
+    llm: 'openai/gpt-4o',
+    mcpServers: {
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+      }
+    },
+    verbose: false
+  });
+
+  const query = 'Find all TypeScript files and count the total lines of code';
+
+  console.log(`Query: ${query}\n`);
+  console.log('Execution Steps:');
+  console.log('='.repeat(50));
+
+  try {
+    const stream = agent.stream({
+      prompt: query,
+      maxSteps: 20,
+      signal: AbortSignal.timeout(60000)
+    });
+
+    let stepNum = 0;
+    let finalResult: string = '';
+
+    while (true) {
+      const { done, value } = await stream.next();
+      
+      if (done) {
+        finalResult = value;
+        break;
+      }
+
+      stepNum++;
+      console.log(`\nStep ${stepNum}: ${value.action.tool}`);
+      console.log(`Input:`, JSON.stringify(value.action.toolInput, null, 2));
+      
+      const output = value.observation.slice(0, 200);
+      console.log(`Output: ${output}${value.observation.length > 200 ? '...' : ''}`);
+    }
+
+    console.log('\n' + '='.repeat(50));
+    console.log('Final Result:');
+    console.log('='.repeat(50));
+    console.log(finalResult);
+
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await agent.close();
+  }
+}
+
+main();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/typescript/agent/basic-usage">
+    Learn core agent operations
+  </Card>
+  <Card title="Memory Management" icon="brain" href="/typescript/agent/memory">
+    Work with conversation history
+  </Card>
+  <Card title="Server Manager" icon="server" href="/typescript/agent/server-manager">
+    Dynamic server switching
+  </Card>
+  <Card title="Agent Overview" icon="robot" href="/typescript/agent/overview">
+    Back to overview
+  </Card>
+</CardGroup>

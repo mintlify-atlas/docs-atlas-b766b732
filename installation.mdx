@@ -1,0 +1,472 @@
+---
+title: "Installation"
+description: "Install mcp-use for TypeScript or Python"
+icon: "download"
+---
+
+## Choose Your Language
+
+mcp-use is available in both TypeScript and Python with consistent APIs across both languages.
+
+<Tabs>
+  <Tab title="TypeScript">
+
+## TypeScript Installation
+
+### Prerequisites
+
+<Info>
+  **Node.js Version**: Node.js 20.19.0 or higher (22+ recommended)
+</Info>
+
+Check your Node.js version:
+
+```bash
+node --version
+```
+
+If you need to upgrade, visit [nodejs.org](https://nodejs.org) or use a version manager like [nvm](https://github.com/nvm-sh/nvm).
+
+### Package Managers
+
+<CodeGroup>
+
+```bash npm
+npm install mcp-use
+```
+
+```bash pnpm
+pnpm add mcp-use
+```
+
+```bash yarn
+yarn add mcp-use
+```
+
+```bash bun
+bun add mcp-use
+```
+
+</CodeGroup>
+
+### Core Dependencies
+
+mcp-use requires Zod for schema validation:
+
+```bash
+npm install mcp-use zod
+```
+
+### Optional Dependencies
+
+Depending on your use case, you may want to install additional packages:
+
+<AccordionGroup>
+  <Accordion title="For Building Agents">
+    ```bash
+    npm install mcp-use @langchain/openai langchain
+    # or for Anthropic
+    npm install mcp-use @langchain/anthropic langchain
+    ```
+  </Accordion>
+  
+  <Accordion title="For React Widgets">
+    ```bash
+    npm install mcp-use react react-dom
+    ```
+  </Accordion>
+  
+  <Accordion title="For Observability">
+    ```bash
+    npm install mcp-use langfuse langfuse-langchain
+    ```
+  </Accordion>
+  
+  <Accordion title="For AI SDK Integration">
+    ```bash
+    npm install mcp-use ai @langchain/anthropic
+    ```
+  </Accordion>
+  
+  <Accordion title="For Code Mode (E2B)">
+    ```bash
+    npm install mcp-use @e2b/code-interpreter
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Development Tools
+
+For the best development experience, also install:
+
+```bash
+# CLI tool with hot reload and inspector
+npm install -D @mcp-use/cli
+
+# TypeScript and build tools
+npm install -D typescript tsx @types/node
+```
+
+### Project Scaffolding
+
+The fastest way to start a new project:
+
+```bash
+npx create-mcp-use-app my-project
+```
+
+This creates a fully configured project with:
+- TypeScript configuration
+- Example server with tools and widgets
+- Hot reload setup
+- Auto-opening inspector
+- Build and deployment scripts
+
+### Verify Installation
+
+Create a test file `test.ts`:
+
+```typescript
+import { MCPServer, text } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "test-server",
+  version: "1.0.0",
+});
+
+server.tool({
+  name: "hello",
+  description: "Say hello",
+  schema: z.object({}),
+}, async () => text("Hello from mcp-use!"));
+
+await server.listen(3000);
+console.log("Server running at http://localhost:3000");
+```
+
+Run it:
+
+```bash
+npx tsx test.ts
+```
+
+You should see:
+```
+Server running at http://localhost:3000
+🔍 Inspector: http://localhost:3000/inspector
+🚀 MCP endpoint: http://localhost:3000/mcp
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+## Python Installation
+
+### Prerequisites
+
+<Info>
+  **Python Version**: Python 3.11 or higher is required
+</Info>
+
+Check your Python version:
+
+```bash
+python --version
+# or
+python3 --version
+```
+
+If you need to upgrade, visit [python.org](https://www.python.org/downloads/).
+
+### Install with pip
+
+<CodeGroup>
+
+```bash pip
+pip install mcp-use
+```
+
+```bash pip (from source)
+git clone https://github.com/mcp-use/mcp-use.git
+cd mcp-use/libraries/python
+pip install -e .
+```
+
+</CodeGroup>
+
+### Virtual Environment (Recommended)
+
+Always use a virtual environment for Python projects:
+
+```bash
+# Create virtual environment
+python -m venv env
+
+# Activate on Linux/Mac
+source env/bin/activate
+
+# Activate on Windows
+env\Scripts\activate
+
+# Install mcp-use
+pip install mcp-use
+```
+
+### LangChain Providers
+
+mcp-use works with various LLM providers through LangChain. Install the provider you need:
+
+<CodeGroup>
+
+```bash OpenAI
+pip install mcp-use langchain-openai
+```
+
+```bash Anthropic
+pip install mcp-use langchain-anthropic
+```
+
+```bash Groq
+pip install mcp-use langchain-groq
+```
+
+```bash Google
+pip install mcp-use langchain-google-genai
+```
+
+</CodeGroup>
+
+<Warning>
+  Only models with tool calling capabilities can be used. Ensure your chosen model supports function calling.
+</Warning>
+
+### Optional Dependencies
+
+<AccordionGroup>
+  <Accordion title="For Search Capabilities">
+    ```bash
+    pip install mcp-use[search]
+    # Includes fastembed for semantic search
+    ```
+  </Accordion>
+  
+  <Accordion title="For E2B Sandboxed Execution">
+    ```bash
+    pip install mcp-use[e2b]
+    # Includes e2b-code-interpreter
+    ```
+  </Accordion>
+  
+  <Accordion title="For Development">
+    ```bash
+    pip install mcp-use[dev]
+    # Includes pytest, black, ruff, mypy, and more
+    ```
+  </Accordion>
+  
+  <Accordion title="All Optional Dependencies">
+    ```bash
+    pip install mcp-use[dev,search,e2b,anthropic,openai]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Environment Variables
+
+Create a `.env` file for your API keys:
+
+```bash
+# OpenAI
+OPENAI_API_KEY=your_openai_key
+
+# Anthropic
+ANTHROPIC_API_KEY=your_anthropic_key
+
+# E2B (for sandboxed execution)
+E2B_API_KEY=your_e2b_key
+
+# Langfuse (for observability)
+LANGFUSE_PUBLIC_KEY=your_public_key
+LANGFUSE_SECRET_KEY=your_secret_key
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+Load them in your code:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+### Verify Installation
+
+Create a test file `test.py`:
+
+```python
+import asyncio
+from mcp_use import MCPClient
+
+async def main():
+    config = {
+        "mcpServers": {
+            "everything": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-everything"],
+            }
+        }
+    }
+    
+    client = MCPClient.from_dict(config)
+    await client.create_all_sessions()
+    
+    session = client.get_session("everything")
+    result = await session.call_tool(
+        name="add",
+        arguments={"a": 5, "b": 3}
+    )
+    
+    print(f"Result: {result.content[0].text}")
+    await client.close_all_sessions()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run it:
+
+```bash
+python test.py
+```
+
+You should see:
+```
+Result: 8
+```
+
+### Development Setup
+
+For contributing or development:
+
+```bash
+# Clone the repository
+git clone https://github.com/mcp-use/mcp-use.git
+cd mcp-use/libraries/python
+
+# Create virtual environment
+python -m venv env
+source env/bin/activate  # or env\Scripts\activate on Windows
+
+# Install in development mode with all dependencies
+pip install -e ".[dev,anthropic,openai,search,e2b]"
+
+# Run tests
+pytest
+
+# Run linting
+ruff check --fix
+ruff format
+```
+
+  </Tab>
+</Tabs>
+
+## IDE Setup
+
+### Visual Studio Code
+
+Recommended extensions:
+
+**TypeScript:**
+- ESLint
+- Prettier
+- TypeScript and JavaScript Language Features
+
+**Python:**
+- Python (Microsoft)
+- Pylance
+- Ruff
+
+### TypeScript Configuration
+
+Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="TypeScript: Module not found">
+    Make sure you're importing from the correct subpaths:
+    
+    ```typescript
+    import { MCPServer } from "mcp-use/server";  // ✅ Correct
+    import { MCPAgent } from "mcp-use/agent";    // ✅ Correct
+    import { MCPClient } from "mcp-use/client";  // ✅ Correct
+    import { useWidget } from "mcp-use/react";   // ✅ Correct
+    ```
+  </Accordion>
+  
+  <Accordion title="Python: Import errors">
+    Make sure your virtual environment is activated and mcp-use is installed:
+    
+    ```bash
+    # Check if mcp-use is installed
+    pip list | grep mcp-use
+    
+    # Reinstall if needed
+    pip install --upgrade mcp-use
+    ```
+  </Accordion>
+  
+  <Accordion title="Node version issues">
+    mcp-use requires Node.js 20.19.0 or higher. Use nvm to switch versions:
+    
+    ```bash
+    nvm install 22
+    nvm use 22
+    ```
+  </Accordion>
+  
+  <Accordion title="Python version issues">
+    mcp-use requires Python 3.11+. Check your version:
+    
+    ```bash
+    python --version
+    ```
+    
+    Use pyenv to manage Python versions:
+    ```bash
+    pyenv install 3.11
+    pyenv local 3.11
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first MCP server
+  </Card>
+  <Card title="Concepts" icon="book" href="/concepts/mcp-protocol">
+    Learn about the MCP protocol
+  </Card>
+</CardGroup>

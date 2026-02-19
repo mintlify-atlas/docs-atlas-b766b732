@@ -1,0 +1,330 @@
+---
+title: "Creating a Server"
+description: "Build your first MCP server with mcp-use"
+icon: "hammer"
+---
+
+## Basic Server Setup
+
+Create a new MCP server with minimal configuration:
+
+```python server.py
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="example-server",
+    version="1.0.0",
+    instructions="This server provides example tools and resources"
+)
+
+if __name__ == "__main__":
+    server.run()
+```
+
+## Server Configuration
+
+Customize your server with various options:
+
+```python
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="my-server",
+    version="1.0.0",
+    instructions="Detailed instructions for AI models",
+    debug=True,  # Enable debug endpoints
+    host="0.0.0.0",  # Default host
+    port=8000,  # Default port
+    mcp_path="/mcp",  # MCP endpoint path
+    docs_path="/docs",  # Documentation path
+    inspector_path="/inspector",  # Inspector UI path
+    openmcp_path="/openmcp.json",  # Metadata path
+    pretty_print_jsonrpc=True,  # Pretty print JSON-RPC logs
+    dns_rebinding_protection=False  # Enable for local dev
+)
+```
+
+### Configuration Parameters
+
+<ParamField path="name" type="str" required>
+  Server name for identification
+</ParamField>
+
+<ParamField path="version" type="str">
+  Server version string (e.g., "1.0.0")
+</ParamField>
+
+<ParamField path="instructions" type="str">
+  Instructions for AI models using this server
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  Enable debug mode with development endpoints
+</ParamField>
+
+<ParamField path="host" type="str" default="0.0.0.0">
+  Host to bind server to
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  Port to bind server to
+</ParamField>
+
+<ParamField path="pretty_print_jsonrpc" type="bool" default="False">
+  Pretty print JSON-RPC messages in logs
+</ParamField>
+
+<ParamField path="dns_rebinding_protection" type="bool" default="False">
+  Enable DNS rebinding protection (recommended for local development)
+</ParamField>
+
+## Running the Server
+
+### Stdio Transport (Default)
+
+For command-line integration:
+
+```python
+server.run(transport="stdio")
+```
+
+Usage:
+```bash
+python server.py
+```
+
+### HTTP Transport
+
+For web-based integrations:
+
+```python
+server.run(
+    transport="streamable-http",
+    host="0.0.0.0",
+    port=8000,
+    reload=True,  # Auto-reload on changes
+    debug=True
+)
+```
+
+Access endpoints:
+- `http://localhost:8000/mcp` - MCP endpoint
+- `http://localhost:8000/docs` - API documentation (debug mode)
+- `http://localhost:8000/inspector` - Inspector UI (debug mode)
+
+### SSE Transport
+
+For server-sent events:
+
+```python
+server.run(transport="sse", port=8000)
+```
+
+## Adding Tools
+
+Define tools using the `@server.tool()` decorator:
+
+```python
+from typing import Annotated
+from pydantic import Field
+
+@server.tool(
+    name="calculate",
+    description="Perform basic calculations"
+)
+async def calculate(
+    operation: Annotated[str, Field(description="Operation: add, subtract, multiply, divide")],
+    a: Annotated[float, Field(description="First number")],
+    b: Annotated[float, Field(description="Second number")]
+) -> float:
+    """Perform a calculation"""
+    if operation == "add":
+        return a + b
+    elif operation == "subtract":
+        return a - b
+    elif operation == "multiply":
+        return a * b
+    elif operation == "divide":
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        return a / b
+    else:
+        raise ValueError(f"Unknown operation: {operation}")
+```
+
+## Adding Resources
+
+Expose data with the `@server.resource()` decorator:
+
+```python
+import json
+from datetime import datetime
+
+@server.resource(
+    uri="data://current-time",
+    name="current_time",
+    description="Current server time",
+    mime_type="application/json"
+)
+async def current_time() -> str:
+    """Get the current server time"""
+    return json.dumps({
+        "timestamp": datetime.now().isoformat(),
+        "timezone": "UTC"
+    })
+```
+
+## Adding Prompts
+
+Create reusable prompts with the `@server.prompt()` decorator:
+
+```python
+@server.prompt(
+    name="code_review",
+    description="Template for code review"
+)
+async def code_review(
+    language: str,
+    code: str
+) -> str:
+    """Generate a code review prompt"""
+    return f"""
+Please review the following {language} code:
+
+```{language}
+{code}
+```
+
+Provide feedback on:
+1. Code quality
+2. Best practices
+3. Potential bugs
+4. Performance improvements
+"""
+```
+
+## Environment-Based Configuration
+
+Use environment variables for configuration:
+
+```python
+import os
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name=os.getenv("SERVER_NAME", "my-server"),
+    version=os.getenv("SERVER_VERSION", "1.0.0"),
+    debug=os.getenv("DEBUG", "false").lower() == "true"
+)
+```
+
+```bash .env
+SERVER_NAME=production-server
+SERVER_VERSION=2.1.0
+DEBUG=false
+```
+
+## Modular Server with Routers
+
+Organize large servers using routers:
+
+```python routes/math.py
+from mcp_use.server import MCPRouter
+
+router = MCPRouter()
+
+@router.tool()
+def add(a: float, b: float) -> float:
+    """Add two numbers"""
+    return a + b
+
+@router.tool()
+def multiply(a: float, b: float) -> float:
+    """Multiply two numbers"""
+    return a * b
+```
+
+```python main.py
+from mcp_use import MCPServer
+from routes.math import router as math_router
+
+server = MCPServer(name="calculator")
+server.include_router(math_router, prefix="math")
+# Tools become: math_add, math_multiply
+
+server.run()
+```
+
+## Auto-Reload for Development
+
+Enable auto-reload to automatically restart on code changes:
+
+```python
+if __name__ == "__main__":
+    server.run(
+        transport="streamable-http",
+        port=8000,
+        reload=True  # Auto-reload on file changes
+    )
+```
+
+## Testing Your Server
+
+### Using the Inspector
+
+With debug mode enabled:
+
+```python
+server = MCPServer(name="test", debug=True)
+server.run(port=8000)
+```
+
+Visit `http://localhost:8000/inspector` to interactively test tools.
+
+### Using mcp-use Client
+
+```python test_client.py
+import asyncio
+from mcp_use import MCPClient
+
+async def test():
+    config = {
+        "mcpServers": {
+            "local": {
+                "url": "http://localhost:8000/mcp"
+            }
+        }
+    }
+    
+    client = MCPClient(config=config)
+    await client.create_all_sessions()
+    
+    session = client.get_session("local")
+    result = await session.call_tool("calculate", {
+        "operation": "add",
+        "a": 5,
+        "b": 3
+    })
+    
+    print(result.content[0].text)
+    await client.close_all_sessions()
+
+asyncio.run(test())
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Tools" icon="wrench" href="/python/server/tools">
+    Learn about defining server tools
+  </Card>
+  <Card title="Resources" icon="database" href="/python/server/resources">
+    Expose data as resources
+  </Card>
+  <Card title="Prompts" icon="message" href="/python/server/prompts">
+    Create reusable prompt templates
+  </Card>
+  <Card title="Transport" icon="network-wired" href="/python/server/transport">
+    Configure transport protocols
+  </Card>
+</CardGroup>

@@ -1,0 +1,768 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy MCP servers using Docker containers'
+icon: 'docker'
+---
+
+## Overview
+
+Docker provides a consistent, portable deployment environment for your MCP servers. This guide covers containerizing your mcp-use application and deploying it across different platforms.
+
+## Benefits of Docker
+
+<CardGroup cols={2}>
+  <Card title="Consistency" icon="check-double">
+    Identical environments across development, staging, and production
+  </Card>
+  <Card title="Isolation" icon="box">
+    Dependencies and runtime isolated from host system
+  </Card>
+  <Card title="Scalability" icon="arrows-up-to-line">
+    Easy horizontal scaling with orchestration tools
+  </Card>
+  <Card title="Portability" icon="plane-departure">
+    Run anywhere Docker is supported - cloud, on-premises, or locally
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- Docker Engine 20.10+ installed
+- Docker Compose 2.0+ (optional, for multi-container setups)
+- Basic understanding of Docker concepts
+
+## Creating a Dockerfile
+
+### Basic Dockerfile
+
+```dockerfile
+# Dockerfile
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application files
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start server
+CMD ["npm", "start"]
+```
+
+### Multi-Stage Build (Optimized)
+
+```dockerfile
+# Dockerfile
+# Stage 1: Build
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including devDependencies)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Stage 2: Production
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start server
+CMD ["node", "dist/index.js"]
+```
+
+### .dockerignore
+
+Create a `.dockerignore` to exclude unnecessary files:
+
+```text
+# .dockerignore
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+dist
+coverage
+.DS_Store
+*.md
+.vscode
+.idea
+```
+
+## Building Docker Images
+
+### Basic Build
+
+```bash
+# Build image
+docker build -t my-mcp-server:latest .
+
+# Build with custom tag
+docker build -t my-mcp-server:v1.0.0 .
+
+# Build with build arguments
+docker build \
+  --build-arg NODE_ENV=production \
+  --build-arg VERSION=1.0.0 \
+  -t my-mcp-server:latest .
+```
+
+### Build Arguments
+
+```dockerfile
+# Dockerfile with build args
+FROM node:22-alpine
+
+ARG NODE_ENV=production
+ARG VERSION=latest
+
+ENV NODE_ENV=${NODE_ENV}
+ENV APP_VERSION=${VERSION}
+
+WORKDIR /app
+
+# ... rest of Dockerfile
+```
+
+## Running Docker Containers
+
+### Basic Run
+
+```bash
+# Run container
+docker run -d \
+  --name mcp-server \
+  -p 3000:3000 \
+  my-mcp-server:latest
+
+# View logs
+docker logs mcp-server
+
+# Follow logs
+docker logs -f mcp-server
+
+# Stop container
+docker stop mcp-server
+
+# Remove container
+docker rm mcp-server
+```
+
+### With Environment Variables
+
+<Tabs>
+  <Tab title="Individual Variables">
+    ```bash
+    docker run -d \
+      --name mcp-server \
+      -p 3000:3000 \
+      -e NODE_ENV=production \
+      -e PORT=3000 \
+      -e OPENAI_API_KEY=sk-... \
+      my-mcp-server:latest
+    ```
+  </Tab>
+  
+  <Tab title="Environment File">
+    ```bash
+    # Create .env.docker
+    NODE_ENV=production
+    PORT=3000
+    OPENAI_API_KEY=sk-...
+    WORKOS_CLIENT_ID=client_...
+    
+    # Run with env file
+    docker run -d \
+      --name mcp-server \
+      -p 3000:3000 \
+      --env-file .env.docker \
+      my-mcp-server:latest
+    ```
+  </Tab>
+  
+  <Tab title="Docker Secrets">
+    ```bash
+    # Create secret
+    echo "sk-..." | docker secret create openai_key -
+    
+    # Run with secret (requires swarm mode)
+    docker service create \
+      --name mcp-server \
+      --secret openai_key \
+      -p 3000:3000 \
+      my-mcp-server:latest
+    ```
+  </Tab>
+</Tabs>
+
+### With Volumes
+
+```bash
+# Mount logs directory
+docker run -d \
+  --name mcp-server \
+  -p 3000:3000 \
+  -v $(pwd)/logs:/app/logs \
+  my-mcp-server:latest
+
+# Mount configuration
+docker run -d \
+  --name mcp-server \
+  -p 3000:3000 \
+  -v $(pwd)/config:/app/config:ro \
+  my-mcp-server:latest
+```
+
+## Docker Compose
+
+### Basic docker-compose.yml
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    image: my-mcp-server:latest
+    container_name: mcp-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    env_file:
+      - .env.production
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+```
+
+### With Nginx Reverse Proxy
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build: .
+    container_name: mcp-server
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    env_file:
+      - .env.production
+    networks:
+      - mcp-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: mcp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - mcp-server
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+```
+
+**nginx.conf:**
+
+```nginx
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream mcp_backend {
+        server mcp-server:3000;
+    }
+
+    server {
+        listen 80;
+        server_name api.yourdomain.com;
+        return 301 https://$server_name$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2;
+        server_name api.yourdomain.com;
+
+        ssl_certificate /etc/nginx/ssl/fullchain.pem;
+        ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+        location / {
+            proxy_pass http://mcp_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # SSE support
+            proxy_buffering off;
+            proxy_read_timeout 86400s;
+        }
+    }
+}
+```
+
+### Running with Docker Compose
+
+```bash
+# Build and start
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose stop
+
+# Stop and remove
+docker-compose down
+
+# Rebuild and restart
+docker-compose up -d --build
+
+# Scale services
+docker-compose up -d --scale mcp-server=3
+```
+
+## Container Registry
+
+### Docker Hub
+
+```bash
+# Login
+docker login
+
+# Tag image
+docker tag my-mcp-server:latest username/my-mcp-server:latest
+docker tag my-mcp-server:latest username/my-mcp-server:v1.0.0
+
+# Push to Docker Hub
+docker push username/my-mcp-server:latest
+docker push username/my-mcp-server:v1.0.0
+
+# Pull from Docker Hub
+docker pull username/my-mcp-server:latest
+```
+
+### GitHub Container Registry
+
+```bash
+# Login
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# Tag image
+docker tag my-mcp-server:latest ghcr.io/username/my-mcp-server:latest
+
+# Push
+docker push ghcr.io/username/my-mcp-server:latest
+```
+
+### AWS ECR
+
+```bash
+# Authenticate
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin \
+  123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+# Tag
+docker tag my-mcp-server:latest \
+  123456789012.dkr.ecr.us-east-1.amazonaws.com/my-mcp-server:latest
+
+# Push
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-mcp-server:latest
+```
+
+## Kubernetes Deployment
+
+### Deployment Manifest
+
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  labels:
+    app: mcp-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-server
+    spec:
+      containers:
+      - name: mcp-server
+        image: my-mcp-server:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        envFrom:
+        - secretRef:
+            name: mcp-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+spec:
+  selector:
+    app: mcp-server
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer
+```
+
+### Deploy to Kubernetes
+
+```bash
+# Create secret
+kubectl create secret generic mcp-secrets \
+  --from-literal=OPENAI_API_KEY=sk-... \
+  --from-literal=WORKOS_API_KEY=sk-...
+
+# Apply deployment
+kubectl apply -f deployment.yaml
+
+# Check status
+kubectl get pods
+kubectl get services
+
+# View logs
+kubectl logs -f deployment/mcp-server
+
+# Scale deployment
+kubectl scale deployment mcp-server --replicas=5
+```
+
+## Cloud Platform Deployments
+
+### AWS ECS (Fargate)
+
+<Steps>
+  <Step title="Push Image to ECR">
+    ```bash
+    # Create ECR repository
+    aws ecr create-repository --repository-name my-mcp-server
+    
+    # Build and push
+    docker build -t my-mcp-server:latest .
+    docker tag my-mcp-server:latest $ECR_URI:latest
+    docker push $ECR_URI:latest
+    ```
+  </Step>
+  
+  <Step title="Create Task Definition">
+    ```json
+    {
+      "family": "mcp-server",
+      "networkMode": "awsvpc",
+      "requiresCompatibilities": ["FARGATE"],
+      "cpu": "512",
+      "memory": "1024",
+      "containerDefinitions": [
+        {
+          "name": "mcp-server",
+          "image": "$ECR_URI:latest",
+          "portMappings": [
+            {
+              "containerPort": 3000,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {"name": "NODE_ENV", "value": "production"}
+          ],
+          "secrets": [
+            {
+              "name": "OPENAI_API_KEY",
+              "valueFrom": "arn:aws:secretsmanager:..."
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Create Service">
+    ```bash
+    aws ecs create-service \
+      --cluster mcp-cluster \
+      --service-name mcp-server \
+      --task-definition mcp-server \
+      --desired-count 2 \
+      --launch-type FARGATE
+    ```
+  </Step>
+</Steps>
+
+### Google Cloud Run
+
+```bash
+# Build and push to GCR
+gcloud builds submit --tag gcr.io/PROJECT_ID/mcp-server
+
+# Deploy to Cloud Run
+gcloud run deploy mcp-server \
+  --image gcr.io/PROJECT_ID/mcp-server \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars NODE_ENV=production \
+  --set-secrets OPENAI_API_KEY=openai-key:latest
+```
+
+### Azure Container Instances
+
+```bash
+# Push to Azure Container Registry
+az acr build --registry myregistry --image mcp-server:latest .
+
+# Deploy to ACI
+az container create \
+  --resource-group myResourceGroup \
+  --name mcp-server \
+  --image myregistry.azurecr.io/mcp-server:latest \
+  --dns-name-label mcp-server \
+  --ports 3000 \
+  --environment-variables NODE_ENV=production \
+  --secure-environment-variables OPENAI_API_KEY=sk-...
+```
+
+## Monitoring and Logging
+
+### Container Logs
+
+```bash
+# Docker logs
+docker logs -f --tail 100 mcp-server
+
+# Docker Compose logs
+docker-compose logs -f mcp-server
+
+# Kubernetes logs
+kubectl logs -f deployment/mcp-server
+```
+
+### Health Monitoring
+
+```bash
+# Check container health
+docker inspect --format='{{.State.Health.Status}}' mcp-server
+
+# Container stats
+docker stats mcp-server
+
+# Kubernetes health
+kubectl describe pod <pod-name>
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Container Won't Start">
+    ```bash
+    # Check logs
+    docker logs mcp-server
+    
+    # Inspect container
+    docker inspect mcp-server
+    
+    # Run interactively for debugging
+    docker run -it --rm my-mcp-server:latest sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Port Already in Use">
+    ```bash
+    # Find process using port
+    lsof -i :3000
+    
+    # Use different host port
+    docker run -p 8080:3000 my-mcp-server:latest
+    ```
+  </Accordion>
+  
+  <Accordion title="Image Too Large">
+    ```dockerfile
+    # Use alpine base images
+    FROM node:22-alpine
+    
+    # Multi-stage builds
+    # Clean npm cache
+    RUN npm ci --only=production && npm cache clean --force
+    
+    # Remove dev dependencies
+    RUN npm prune --production
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Check>
+  **Use multi-stage builds** to reduce image size
+</Check>
+
+<Check>
+  **Run as non-root user** for security
+</Check>
+
+<Check>
+  **Implement health checks** for reliability
+</Check>
+
+<Check>
+  **Use .dockerignore** to exclude unnecessary files
+</Check>
+
+<Check>
+  **Tag images with versions** not just `latest`
+</Check>
+
+<Check>
+  **Use environment variables** for configuration
+</Check>
+
+<Check>
+  **Implement proper logging** to stdout/stderr
+</Check>
+
+<Check>
+  **Set resource limits** to prevent resource exhaustion
+</Check>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Kubernetes Guide" icon="dharmachakra" href="https://kubernetes.io/docs/tutorials/">
+    Learn Kubernetes orchestration
+  </Card>
+  <Card title="Docker Best Practices" icon="docker" href="https://docs.docker.com/develop/dev-best-practices/">
+    Official Docker best practices
+  </Card>
+  <Card title="Integrate with Claude" icon="brain" href="/deployment/claude">
+    Connect to Claude Desktop
+  </Card>
+  <Card title="Monitoring Setup" icon="chart-line" href="/deployment/overview#monitoring-and-observability">
+    Set up observability
+  </Card>
+</CardGroup>

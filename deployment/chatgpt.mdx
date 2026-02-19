@@ -1,0 +1,612 @@
+---
+title: 'Integrating with ChatGPT'
+description: 'Connect your MCP servers to ChatGPT'
+icon: 'message'
+---
+
+## Overview
+
+ChatGPT can connect to your MCP servers to access custom tools and capabilities. This integration allows ChatGPT to leverage your MCP tools during conversations, extending its functionality beyond built-in capabilities.
+
+<Note>
+  MCP server integration with ChatGPT requires a deployed server accessible via HTTPS. You cannot use localhost URLs.
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Deployed MCP Server">
+    Your MCP server must be deployed and accessible via HTTPS:
+    
+    - **Manufact Cloud**: Automatic HTTPS deployment
+    - **Self-hosted**: Requires SSL certificate (Let's Encrypt recommended)
+    - **Custom domain**: Optional but recommended
+  </Step>
+  
+  <Step title="ChatGPT Plus or Enterprise">
+    MCP integration requires:
+    - ChatGPT Plus subscription, or
+    - ChatGPT Enterprise account, or
+    - ChatGPT Team account
+  </Step>
+  
+  <Step title="Server URL">
+    Know your MCP server endpoint URL:
+    ```
+    https://your-server.run.mcp-use.com/mcp
+    ```
+  </Step>
+</Steps>
+
+## Connection Methods
+
+### Method 1: ChatGPT Custom Actions (Recommended)
+
+<Info>
+  Custom Actions allow you to create reusable connections to your MCP server that can be used across multiple ChatGPT sessions.
+</Info>
+
+<Steps>
+  <Step title="Get MCP Server Metadata">
+    First, retrieve your server's tool definitions:
+    
+    ```bash
+    curl https://your-server.run.mcp-use.com/mcp \
+      -H "Content-Type: application/json" \
+      -d '{
+        "jsonrpc": "2.0",
+        "method": "tools/list",
+        "id": 1
+      }'
+    ```
+    
+    This returns your server's available tools and their schemas.
+  </Step>
+  
+  <Step title="Create Custom GPT">
+    1. Go to [ChatGPT](https://chat.openai.com)
+    2. Click your profile icon → **My GPTs**
+    3. Click **Create a GPT**
+    4. In the Configure tab, click **Create new action**
+  </Step>
+  
+  <Step title="Configure Action Schema">
+    Create an OpenAPI schema for your MCP tools:
+    
+    ```yaml
+    openapi: 3.0.0
+    info:
+      title: My MCP Server
+      version: 1.0.0
+      description: Custom tools from my MCP server
+    servers:
+      - url: https://your-server.run.mcp-use.com
+    paths:
+      /mcp:
+        post:
+          operationId: callMCPTool
+          summary: Call an MCP tool
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    jsonrpc:
+                      type: string
+                      default: "2.0"
+                    method:
+                      type: string
+                      enum: [tools/call]
+                    params:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: Tool name to call
+                        arguments:
+                          type: object
+                          description: Tool arguments
+                    id:
+                      type: integer
+          responses:
+            '200':
+              description: Tool result
+    ```
+  </Step>
+  
+  <Step title="Test and Save">
+    1. Test the action in ChatGPT's action editor
+    2. Save your Custom GPT
+    3. Start using your MCP tools in conversations
+  </Step>
+</Steps>
+
+### Method 2: Direct Tool Calling
+
+ChatGPT can call HTTP endpoints directly using its function calling capabilities:
+
+<Steps>
+  <Step title="Describe Your Tools">
+    In your ChatGPT conversation, describe your MCP server's capabilities:
+    
+    ```
+    I have an MCP server at https://your-server.run.mcp-use.com/mcp
+    that provides the following tools:
+    
+    1. get_weather: Gets weather for a location
+       - Input: { "city": "string" }
+    
+    2. search_web: Searches the web
+       - Input: { "query": "string" }
+    
+    Please use these tools when relevant.
+    ```
+  </Step>
+  
+  <Step title="ChatGPT Makes Requests">
+    ChatGPT will format and send MCP-compatible requests:
+    
+    ```json
+    {
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Tokyo"
+        }
+      },
+      "id": 1
+    }
+    ```
+  </Step>
+</Steps>
+
+## Server Configuration
+
+### CORS Configuration
+
+Ensure your MCP server allows requests from ChatGPT:
+
+```typescript
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  name: "my-server",
+  version: "1.0.0",
+  cors: {
+    origin: [
+      "https://chat.openai.com",
+      "https://chatgpt.com"
+    ],
+    credentials: true
+  }
+});
+```
+
+### Authentication
+
+<Tabs>
+  <Tab title="API Key Authentication">
+    Implement API key validation:
+    
+    ```typescript
+    import { MCPServer } from "mcp-use/server";
+    
+    const server = new MCPServer({
+      name: "my-server",
+      version: "1.0.0",
+      middleware: [
+        (req, res, next) => {
+          const apiKey = req.headers["x-api-key"];
+          if (apiKey !== process.env.EXPECTED_API_KEY) {
+            return res.status(401).json({ error: "Unauthorized" });
+          }
+          next();
+        }
+      ]
+    });
+    ```
+    
+    In ChatGPT Custom Action, add header:
+    ```yaml
+    components:
+      securitySchemes:
+        ApiKeyAuth:
+          type: apiKey
+          in: header
+          name: X-API-Key
+    security:
+      - ApiKeyAuth: []
+    ```
+  </Tab>
+  
+  <Tab title="OAuth 2.0">
+    Use OAuth for user-specific access:
+    
+    ```typescript
+    import { MCPServer } from "mcp-use/server";
+    
+    const server = new MCPServer({
+      name: "my-server",
+      version: "1.0.0",
+      oauth: {
+        provider: "auth0",
+        clientId: process.env.AUTH0_CLIENT_ID,
+        domain: process.env.AUTH0_DOMAIN
+      }
+    });
+    ```
+    
+    In ChatGPT, configure OAuth:
+    ```yaml
+    components:
+      securitySchemes:
+        OAuth2:
+          type: oauth2
+          flows:
+            authorizationCode:
+              authorizationUrl: https://your-domain.auth0.com/authorize
+              tokenUrl: https://your-domain.auth0.com/oauth/token
+              scopes:
+                read: Read access
+                write: Write access
+    ```
+  </Tab>
+  
+  <Tab title="No Authentication">
+    For public tools (not recommended for production):
+    
+    ```typescript
+    const server = new MCPServer({
+      name: "public-server",
+      version: "1.0.0",
+      // No auth configuration
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Example Integration
+
+### Weather Tool Integration
+
+<Steps>
+  <Step title="Create MCP Server">
+    ```typescript
+    import { MCPServer, text } from "mcp-use/server";
+    import { z } from "zod";
+    
+    const server = new MCPServer({
+      name: "weather-server",
+      version: "1.0.0"
+    });
+    
+    server.tool({
+      name: "get_weather",
+      description: "Get current weather for a city",
+      schema: z.object({
+        city: z.string().describe("City name"),
+        units: z.enum(["celsius", "fahrenheit"]).optional()
+      })
+    }, async ({ city, units = "celsius" }) => {
+      const weather = await fetchWeather(city, units);
+      return text(`Weather in ${city}: ${weather.temp}°, ${weather.conditions}`);
+    });
+    
+    await server.listen(3000);
+    ```
+  </Step>
+  
+  <Step title="Deploy Server">
+    ```bash
+    # Deploy to Manufact Cloud
+    npx mcp-use deploy
+    
+    # Note the deployment URL
+    # Example: https://weather-abc123.run.mcp-use.com/mcp
+    ```
+  </Step>
+  
+  <Step title="Create Custom GPT">
+    Configure action in ChatGPT:
+    
+    ```yaml
+    openapi: 3.0.0
+    info:
+      title: Weather Server
+      version: 1.0.0
+    servers:
+      - url: https://weather-abc123.run.mcp-use.com
+    paths:
+      /mcp:
+        post:
+          operationId: getWeather
+          summary: Get weather for a city
+          requestBody:
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    jsonrpc:
+                      type: string
+                      default: "2.0"
+                    method:
+                      type: string
+                      enum: [tools/call]
+                    params:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          enum: [get_weather]
+                        arguments:
+                          type: object
+                          properties:
+                            city:
+                              type: string
+                            units:
+                              type: string
+                              enum: [celsius, fahrenheit]
+    ```
+  </Step>
+  
+  <Step title="Test in ChatGPT">
+    Start a conversation:
+    
+    ```
+    User: What's the weather in Tokyo?
+    
+    ChatGPT: [Calls your MCP tool]
+    Let me check the weather in Tokyo for you.
+    
+    [Displays weather information from your server]
+    ```
+  </Step>
+</Steps>
+
+## Advanced Features
+
+### Streaming Responses
+
+Enable streaming for long-running operations:
+
+```typescript
+import { MCPServer, streamText } from "mcp-use/server";
+
+server.tool({
+  name: "generate_report",
+  description: "Generate a detailed report",
+  schema: z.object({ topic: z.string() })
+}, async function* ({ topic }) {
+  yield* streamText(`Generating report on ${topic}...\n\n`);
+  
+  for (const section of generateSections(topic)) {
+    yield* streamText(section + "\n");
+    await delay(100);
+  }
+});
+```
+
+### Error Handling
+
+Provide helpful error messages:
+
+```typescript
+server.tool({
+  name: "search_database",
+  description: "Search internal database",
+  schema: z.object({ query: z.string() })
+}, async ({ query }) => {
+  try {
+    const results = await database.search(query);
+    return text(`Found ${results.length} results`);
+  } catch (error) {
+    if (error.code === "RATE_LIMIT") {
+      return text("Rate limit exceeded. Please try again in a few minutes.");
+    }
+    throw error; // Let MCP handle other errors
+  }
+});
+```
+
+### Tool Context
+
+Provide context-aware responses:
+
+```typescript
+server.tool({
+  name: "get_user_info",
+  description: "Get information about the current user",
+  schema: z.object({})
+}, async ({}, context) => {
+  // Access user information from context
+  const userId = context.headers["x-user-id"];
+  const userInfo = await fetchUserInfo(userId);
+  
+  return text(`User: ${userInfo.name}, Email: ${userInfo.email}`);
+});
+```
+
+## Testing Your Integration
+
+### Test with Inspector
+
+```bash
+# Open inspector
+open https://inspector.mcp-use.com/inspector?autoConnect=https://your-server.run.mcp-use.com/mcp
+```
+
+Test tools manually before integrating with ChatGPT.
+
+### Test with cURL
+
+```bash
+# List tools
+curl -X POST https://your-server.run.mcp-use.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }'
+
+# Call tool
+curl -X POST https://your-server.run.mcp-use.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "get_weather",
+      "arguments": {"city": "Tokyo"}
+    },
+    "id": 2
+  }'
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="CORS Errors">
+    **Problem**: ChatGPT cannot access your server due to CORS
+    
+    **Solution**:
+    ```typescript
+    const server = new MCPServer({
+      cors: {
+        origin: [
+          "https://chat.openai.com",
+          "https://chatgpt.com"
+        ],
+        methods: ["GET", "POST", "OPTIONS"],
+        credentials: true
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Authentication Failures">
+    **Problem**: API key or OAuth not working
+    
+    **Solution**:
+    - Verify API key is correctly set in ChatGPT action headers
+    - Check server logs for authentication errors
+    - Test authentication with cURL first
+    - Ensure OAuth callback URL is whitelisted
+  </Accordion>
+  
+  <Accordion title="Tool Not Found">
+    **Problem**: ChatGPT receives "tool not found" error
+    
+    **Solution**:
+    - Verify tool name matches exactly
+    - Check tool is registered: `tools/list`
+    - Ensure server is deployed and running
+    - Test with Inspector first
+  </Accordion>
+  
+  <Accordion title="Timeout Errors">
+    **Problem**: Requests timeout
+    
+    **Solution**:
+    - Optimize slow operations
+    - Implement streaming for long tasks
+    - Increase server timeout settings
+    - Check network connectivity
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Check>
+  **Use descriptive tool names** that clearly indicate their purpose
+</Check>
+
+<Check>
+  **Provide detailed descriptions** in tool schemas to help ChatGPT understand when to use them
+</Check>
+
+<Check>
+  **Implement proper authentication** for production deployments
+</Check>
+
+<Check>
+  **Handle errors gracefully** with helpful error messages
+</Check>
+
+<Check>
+  **Test thoroughly** before deploying to production
+</Check>
+
+<Check>
+  **Monitor usage** with logging and analytics
+</Check>
+
+<Check>
+  **Set rate limits** to prevent abuse
+</Check>
+
+<Check>
+  **Use HTTPS** for all production deployments
+</Check>
+
+## Rate Limiting
+
+Implement rate limiting to control usage:
+
+```typescript
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: "Too many requests, please try again later."
+});
+
+const server = new MCPServer({
+  name: "rate-limited-server",
+  middleware: [limiter]
+});
+```
+
+## Usage Analytics
+
+Track tool usage:
+
+```typescript
+server.tool({
+  name: "track_usage",
+  description: "Internal tracking tool"
+}, async (args, context) => {
+  // Log usage to analytics
+  await analytics.track({
+    event: "tool_called",
+    toolName: context.tool.name,
+    userId: context.userId,
+    timestamp: new Date()
+  });
+  
+  // Continue with tool logic
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integrate with Claude" icon="brain" href="/deployment/claude">
+    Connect to Claude Desktop
+  </Card>
+  <Card title="Custom Clients" icon="plug" href="/deployment/custom-clients">
+    Build custom MCP clients
+  </Card>
+  <Card title="Authentication" icon="lock" href="/deployment/chatgpt#authentication">
+    Secure your integration
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/deployment/overview#monitoring-and-observability">
+    Track usage and performance
+  </Card>
+</CardGroup>

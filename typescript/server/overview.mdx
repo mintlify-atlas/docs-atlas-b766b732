@@ -1,0 +1,341 @@
+---
+title: 'MCP Server Overview'
+description: 'Build MCP servers with mcp-use'
+icon: 'server'
+---
+
+# MCP Server Overview
+
+The `MCPServer` class provides a complete framework for building Model Context Protocol servers. It combines MCP protocol handling with HTTP server capabilities built on [Hono](https://hono.dev).
+
+## Key Features
+
+- **Tools** - Expose functions that AI models can call
+- **Resources** - Serve data that models can read
+- **Prompts** - Define reusable prompt templates
+- **Widgets** - Create interactive UI components (ChatGPT Apps, MCP Apps)
+- **OAuth** - Built-in authentication support
+- **Notifications** - Send real-time updates to clients
+- **Sampling** - Request LLM completions from clients
+- **Inspector** - Built-in debugging UI
+- **Hot Module Reload** - Instant updates in development
+
+## Basic Server
+
+Create a simple server:
+
+```typescript server.ts
+import { MCPServer, text } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  description: 'My first MCP server'
+});
+
+// Register a tool
+server.tool(
+  {
+    name: 'greet',
+    description: 'Greet a user',
+    schema: z.object({
+      name: z.string()
+    })
+  },
+  async ({ name }) => {
+    return text(`Hello, ${name}!`);
+  }
+);
+
+// Start the server
+await server.listen(3000);
+```
+
+## Server Configuration
+
+```typescript
+const server = new MCPServer({
+  // Required
+  name: 'my-server',
+  version: '1.0.0',
+  
+  // Optional
+  description: 'Server description',
+  
+  // OAuth configuration
+  oauth: oauthAuth0Provider({
+    clientId: process.env.AUTH0_CLIENT_ID!,
+    clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+    domain: process.env.AUTH0_DOMAIN!
+  }),
+  
+  // Session storage
+  sessionStore: new RedisSessionStore({
+    client: redisClient
+  }),
+  
+  // Stream manager for SSE
+  streamManager: new RedisStreamManager({
+    client: redisClient
+  }),
+  
+  // Icons for Inspector
+  icons: [
+    { src: '/logo.png', sizes: ['32x32'] }
+  ],
+  
+  // Custom favicon
+  favicon: '/favicon.ico'
+});
+```
+
+## Server Methods
+
+### Tool Registration
+
+```typescript
+server.tool(definition, callback);
+```
+
+Register tools that AI models can call. See [Tools Guide](/typescript/server/tools).
+
+### Resource Registration
+
+```typescript
+server.resource(definition, callback);
+server.resourceTemplate(definition, callback);
+```
+
+Serve data and dynamic content. See [Resources Guide](/typescript/server/resources).
+
+### Prompt Registration
+
+```typescript
+server.prompt(definition, callback);
+```
+
+Define prompt templates. See [Prompts Guide](/typescript/server/prompts).
+
+### Widget Registration
+
+```typescript
+server.uiResource(definition);
+```
+
+Create interactive UI components. See [Widgets Guide](/typescript/server/widgets).
+
+## Server Lifecycle
+
+### Starting the Server
+
+```typescript
+// Start on default port (3000)
+await server.listen();
+
+// Start on specific port
+await server.listen(8080);
+
+// Custom configuration
+await server.listen({
+  port: 8080,
+  hostname: '0.0.0.0'
+});
+```
+
+### Getting the Handler
+
+For serverless deployments:
+
+```typescript
+const handler = server.getHandler();
+
+// Use with your platform
+export default handler; // Cloudflare Workers
+export { handler }; // Vercel
+```
+
+## Request Context
+
+Access HTTP request context in tools:
+
+```typescript
+server.tool(
+  {
+    name: 'get-user',
+    description: 'Get current user'
+  },
+  async (params, ctx) => {
+    // OAuth user info
+    const user = ctx.auth.user;
+    
+    // HTTP request
+    const userAgent = ctx.req.header('user-agent');
+    
+    // All Hono context methods
+    const origin = ctx.req.url.origin;
+    
+    return object({ user, userAgent, origin });
+  }
+);
+```
+
+## Response Helpers
+
+mcp-use provides typed response helpers:
+
+```typescript
+import { 
+  text, 
+  object, 
+  markdown, 
+  html,
+  image,
+  audio,
+  error,
+  widget
+} from 'mcp-use/server';
+
+// Text response
+return text('Hello');
+
+// JSON object
+return object({ status: 'ok' });
+
+// Markdown
+return markdown('# Title\n\nContent');
+
+// Error
+return error('Something went wrong');
+```
+
+See [Response Helpers API](/typescript/api/response-helpers).
+
+## Advanced Features
+
+### Custom Routes
+
+Add custom HTTP endpoints:
+
+```typescript
+// Access the Hono app
+server.app.get('/health', (c) => {
+  return c.json({ status: 'ok' });
+});
+
+server.app.post('/webhook', async (c) => {
+  const body = await c.req.json();
+  // Handle webhook
+  return c.json({ received: true });
+});
+```
+
+### Notifications
+
+Send real-time updates:
+
+```typescript
+import { sendNotification } from 'mcp-use/server';
+
+// Send to all clients
+await sendNotification({
+  method: 'data.updated',
+  params: { message: 'New data available' }
+});
+```
+
+See [Notifications Guide](/typescript/server/notifications).
+
+### Sampling
+
+Request LLM completions:
+
+```typescript
+server.tool(
+  { name: 'analyze' },
+  async (params, ctx) => {
+    const result = await ctx.sample({
+      messages: [
+        { role: 'user', content: { type: 'text', text: 'Analyze this' } }
+      ],
+      maxTokens: 100
+    });
+    
+    return text(result.content.text);
+  }
+);
+```
+
+See [Sampling Guide](/typescript/server/sampling).
+
+## Deployment
+
+### Node.js
+
+```typescript
+await server.listen(process.env.PORT || 3000);
+```
+
+### Cloudflare Workers
+
+```typescript
+export default server.getHandler();
+```
+
+### Vercel Edge Functions
+
+```typescript
+export const config = { runtime: 'edge' };
+export default server.getHandler();
+```
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --production
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+## Inspector UI
+
+Every server includes a built-in debugging interface:
+
+- **Tools** - Test tools with custom inputs
+- **Resources** - Browse and read resources
+- **Prompts** - Try prompts with different arguments
+- **Widgets** - Preview interactive components
+- **Sessions** - View active connections
+- **Logs** - Real-time server activity
+
+Access it at your server's root URL (e.g., `http://localhost:3000`).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Servers" icon="plus" href="/typescript/server/creating-server">
+    Detailed server setup guide
+  </Card>
+  <Card title="Tools" icon="wrench" href="/typescript/server/tools">
+    Build AI-callable tools
+  </Card>
+  <Card title="Resources" icon="database" href="/typescript/server/resources">
+    Serve data to AI models
+  </Card>
+  <Card title="OAuth" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+</CardGroup>
+
+## Examples
+
+Check out example servers:
+
+- [Simple Server](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/server/basic/simple)
+- [OAuth Server](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/server/oauth)
+- [Notification Server](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/server/features/notifications)
+- [Widget Server](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/server/ui)

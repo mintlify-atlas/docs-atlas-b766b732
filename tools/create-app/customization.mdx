@@ -1,0 +1,628 @@
+---
+title: 'Customization'
+description: 'Customize and configure your generated MCP application'
+icon: 'sliders'
+---
+
+# Customization
+
+Learn how to customize your generated MCP application to fit your needs.
+
+## Server Configuration
+
+Customize your MCP server in `src/index.ts`:
+
+### Basic Settings
+
+```typescript src/index.ts
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  // Required
+  name: "my-server",
+  version: "1.0.0",
+
+  // Display Information
+  title: "My MCP Server",              // Display name
+  description: "My awesome MCP server",  // Description
+
+  // URLs
+  baseUrl: "http://localhost:3000",     // Full base URL
+  websiteUrl: "https://mycompany.com",  // Company website
+
+  // Branding
+  favicon: "favicon.ico",               // Favicon path
+  icons: [
+    {
+      src: "icon.svg",
+      mimeType: "image/svg+xml",
+      sizes: ["512x512"],
+    },
+  ],
+});
+```
+
+### Environment Variables
+
+Use environment variables for configuration:
+
+```typescript src/index.ts
+const server = new MCPServer({
+  name: process.env.SERVER_NAME || "my-server",
+  version: process.env.SERVER_VERSION || "1.0.0",
+  baseUrl: process.env.MCP_URL || "http://localhost:3000",
+});
+
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+server.listen(PORT);
+```
+
+Create `.env` file:
+
+```bash .env
+SERVER_NAME=my-production-server
+SERVER_VERSION=2.1.0
+MCP_URL=https://api.mycompany.com
+PORT=8080
+
+# API Keys
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgres://...
+```
+
+<Warning>
+  Never commit `.env` to Git! It's already in `.gitignore`.
+</Warning>
+
+## Package.json Scripts
+
+Customize your development workflow:
+
+```json package.json
+{
+  "scripts": {
+    // Development
+    "dev": "mcp-use dev",
+    "dev:debug": "NODE_OPTIONS='--inspect' mcp-use dev",
+    "dev:port": "mcp-use dev --port 8080",
+
+    // Building
+    "build": "mcp-use build",
+    "build:watch": "mcp-use build --watch",
+
+    // Production
+    "start": "mcp-use start",
+    "start:tunnel": "mcp-use start --tunnel",
+
+    // Deployment
+    "deploy": "mcp-use deploy",
+    "deploy:prod": "mcp-use deploy --env-file .env.production",
+
+    // Testing
+    "test": "vitest",
+    "test:watch": "vitest watch",
+
+    // Linting
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write src"
+  }
+}
+```
+
+## TypeScript Configuration
+
+Customize `tsconfig.json` for your needs:
+
+### Strict Mode
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    // Stricter type checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+
+    // Other options
+    "target": "ES2020",
+    "module": "ESNext",
+    "outDir": "./dist",
+    "rootDir": "./src"
+  }
+}
+```
+
+### Path Aliases
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@tools/*": ["src/tools/*"],
+      "@utils/*": ["src/utils/*"]
+    }
+  }
+}
+```
+
+Use in code:
+
+```typescript src/index.ts
+import { myTool } from "@tools/weather";
+import { formatDate } from "@utils/date";
+```
+
+## Project Structure
+
+Organize your code for scalability:
+
+### Recommended Structure
+
+```
+my-mcp-server/
+├── src/
+│   ├── index.ts              # Server entry point
+│   ├── tools/                # Tool definitions
+│   │   ├── weather.ts
+│   │   ├── database.ts
+│   │   └── index.ts          # Export all tools
+│   ├── resources/            # Resource definitions
+│   │   ├── config.ts
+│   │   └── index.ts
+│   ├── prompts/              # Prompt templates
+│   │   ├── code-review.ts
+│   │   └── index.ts
+│   ├── utils/                # Utilities
+│   │   ├── api.ts
+│   │   └── database.ts
+│   └── types/                # Type definitions
+│       └── index.ts
+├── resources/                # React widgets
+│   ├── dashboard/
+│   │   ├── widget.tsx
+│   │   ├── components/
+│   │   │   ├── Chart.tsx
+│   │   │   └── Sidebar.tsx
+│   │   └── styles.css
+│   └── weather.tsx
+├── public/                   # Static assets
+│   ├── favicon.ico
+│   ├── icon.svg
+│   └── images/
+├── tests/                    # Tests
+│   ├── tools.test.ts
+│   └── resources.test.ts
+├── .env                      # Environment variables
+├── .env.example              # Example env vars
+├── .gitignore
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+### Example: Modular Tools
+
+```typescript src/tools/weather.ts
+import { z } from "zod";
+import { text } from "mcp-use/server";
+
+export const weatherTool = {
+  name: "fetch-weather",
+  description: "Fetch weather for a city",
+  schema: z.object({
+    city: z.string(),
+    units: z.enum(["celsius", "fahrenheit"]).default("celsius"),
+  }),
+  handler: async ({ city, units }) => {
+    // Implementation
+    return text(`Weather in ${city}`);
+  },
+};
+```
+
+```typescript src/tools/index.ts
+export { weatherTool } from "./weather";
+export { databaseTool } from "./database";
+```
+
+```typescript src/index.ts
+import { MCPServer } from "mcp-use/server";
+import * as tools from "./tools";
+
+const server = new MCPServer({ /* ... */ });
+
+// Register all tools
+for (const tool of Object.values(tools)) {
+  server.tool(tool, tool.handler);
+}
+
+server.listen(3000);
+```
+
+## Widget Customization
+
+Customize React widgets in the `resources/` directory:
+
+### Styling Options
+
+<Tabs>
+  <Tab title="Tailwind CSS">
+    Tailwind is pre-configured:
+
+    ```tsx resources/my-widget.tsx
+    export default function MyWidget() {
+      return (
+        <div className="p-4 bg-white dark:bg-gray-900">
+          <h1 className="text-2xl font-bold mb-4">Title</h1>
+          <button className="px-4 py-2 bg-blue-500 text-white rounded">
+            Click Me
+          </button>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab title="Custom CSS">
+    Add separate CSS files:
+
+    ```tsx resources/my-widget/widget.tsx
+    import './styles.css';
+
+    export default function MyWidget() {
+      return <div className="my-widget">Content</div>;
+    }
+    ```
+
+    ```css resources/my-widget/styles.css
+    .my-widget {
+      padding: 1rem;
+      background: linear-gradient(to right, #667eea, #764ba2);
+      color: white;
+    }
+    ```
+  </Tab>
+
+  <Tab title="CSS Modules">
+    Use CSS modules:
+
+    ```tsx resources/my-widget/widget.tsx
+    import styles from './styles.module.css';
+
+    export default function MyWidget() {
+      return <div className={styles.widget}>Content</div>;
+    }
+    ```
+
+    ```css resources/my-widget/styles.module.css
+    .widget {
+      padding: 1rem;
+      background: blue;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Widget Configuration
+
+Customize widget metadata:
+
+```tsx resources/my-widget.tsx
+import { z } from "zod";
+import type { WidgetMetadata } from "mcp-use/react";
+
+const propSchema = z.object({
+  title: z.string().describe("Widget title"),
+  data: z.array(z.number()).describe("Chart data"),
+  theme: z.enum(["light", "dark"]).default("light"),
+});
+
+export const widgetMetadata: WidgetMetadata = {
+  title: "My Custom Widget",
+  description: "A widget that displays custom data",
+  props: propSchema,
+};
+
+export default function MyWidget() {
+  const { props } = useMcp<z.infer<typeof propSchema>>();
+  // Use props.title, props.data, props.theme
+}
+```
+
+## Adding Dependencies
+
+### Install Packages
+
+```bash
+# Production dependencies
+npm install axios date-fns
+
+# Development dependencies
+npm install --save-dev eslint prettier
+
+# Widget-specific dependencies
+npm install recharts lucide-react
+```
+
+### Example: Using External API
+
+```typescript src/tools/weather.ts
+import axios from "axios";
+
+server.tool(
+  {
+    name: "fetch-weather",
+    schema: z.object({ city: z.string() }),
+  },
+  async ({ city }) => {
+    const response = await axios.get(
+      `https://api.weatherapi.com/v1/current.json`,
+      {
+        params: {
+          key: process.env.WEATHER_API_KEY,
+          q: city,
+        },
+      }
+    );
+
+    return object(response.data);
+  }
+);
+```
+
+### Example: Using Date Library
+
+```typescript src/utils/date.ts
+import { format, parseISO } from "date-fns";
+
+export function formatDate(date: string): string {
+  return format(parseISO(date), "MMM dd, yyyy");
+}
+```
+
+## Testing
+
+Add tests to your project:
+
+### Setup Vitest
+
+```bash
+npm install --save-dev vitest
+```
+
+```typescript vitest.config.ts
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: "node",
+  },
+});
+```
+
+### Example Tests
+
+```typescript tests/tools.test.ts
+import { describe, it, expect } from "vitest";
+import { weatherTool } from "../src/tools/weather";
+
+describe("Weather Tool", () => {
+  it("should fetch weather for a city", async () => {
+    const result = await weatherTool.handler({
+      city: "San Francisco",
+      units: "celsius",
+    });
+
+    expect(result.content[0].type).toBe("text");
+    expect(result.content[0].text).toContain("San Francisco");
+  });
+
+  it("should validate schema", () => {
+    expect(() => {
+      weatherTool.schema.parse({ city: "NYC" });
+    }).not.toThrow();
+
+    expect(() => {
+      weatherTool.schema.parse({ city: 123 });
+    }).toThrow();
+  });
+});
+```
+
+## Linting and Formatting
+
+Add code quality tools:
+
+### ESLint
+
+```bash
+npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
+```
+
+```javascript .eslintrc.cjs
+module.exports = {
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+  ],
+  rules: {
+    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/no-explicit-any': 'error',
+  },
+};
+```
+
+### Prettier
+
+```bash
+npm install --save-dev prettier
+```
+
+```json .prettierrc
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": false,
+  "printWidth": 80,
+  "tabWidth": 2
+}
+```
+
+## Docker Support
+
+Add Docker support:
+
+```dockerfile Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --production=false
+
+COPY . .
+RUN npm run build
+RUN npm ci --production
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
+```
+
+## Git Hooks
+
+Add pre-commit hooks with Husky:
+
+```bash
+npm install --save-dev husky lint-staged
+npx husky init
+```
+
+```javascript .husky/pre-commit
+#!/bin/sh
+npx lint-staged
+```
+
+```json package.json
+{
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.tsx": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}
+```
+
+## Documentation
+
+Customize your README:
+
+```markdown README.md
+# My MCP Server
+
+Description of your MCP server.
+
+## Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Installation
+
+\`\`\`bash
+npm install
+\`\`\`
+
+## Configuration
+
+Copy `.env.example` to `.env`:
+
+\`\`\`bash
+cp .env.example .env
+\`\`\`
+
+Fill in your environment variables.
+
+## Development
+
+\`\`\`bash
+npm run dev
+\`\`\`
+
+## Production
+
+\`\`\`bash
+npm run build
+npm start
+\`\`\`
+
+## API
+
+### Tools
+
+#### fetch-weather
+
+Fetch weather for a city.
+
+**Parameters:**
+- `city` (string): City name
+- `units` (enum): "celsius" or "fahrenheit"
+
+**Example:**
+\`\`\`json
+{
+  "city": "San Francisco",
+  "units": "celsius"
+}
+\`\`\`
+
+## License
+
+MIT
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Commands" icon="terminal" href="/tools/cli/commands">
+    Learn development and deployment commands
+  </Card>
+  <Card title="Building Tools" icon="wrench" href="/typescript/server/tools">
+    Create MCP tools and resources
+  </Card>
+  <Card title="UI Widgets" icon="paintbrush" href="/typescript/server/ui-widgets">
+    Build React widgets
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/tools/cli/deployment">
+    Deploy to production
+  </Card>
+</CardGroup>

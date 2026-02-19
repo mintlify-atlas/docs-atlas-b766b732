@@ -1,0 +1,600 @@
+---
+title: 'Self-Hosting'
+description: 'Deploy your own MCP Inspector instance with Docker for production use'
+icon: 'server'
+---
+
+# Self-Hosting the Inspector
+
+Deploy the MCP Inspector to your own infrastructure for full control, security, and customization.
+
+## Why Self-Host?
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield">
+    Keep sensitive data within your network
+  </Card>
+  <Card title="Control" icon="sliders">
+    Full customization and configuration
+  </Card>
+  <Card title="Compliance" icon="file-certificate">
+    Meet enterprise security requirements
+  </Card>
+  <Card title="Air-Gapped" icon="network-wired">
+    Works in isolated networks
+  </Card>
+</CardGroup>
+
+## Docker Deployment
+
+The official Docker image is the easiest way to self-host.
+
+### Quick Start
+
+```bash
+docker run -d -p 8080:8080 --name mcp-inspector mcpuse/inspector:latest
+```
+
+Then visit `http://localhost:8080` to access your inspector.
+
+### Docker Image Tags
+
+Available on [Docker Hub](https://hub.docker.com/r/mcpuse/inspector):
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Latest stable release |
+| `0.21.1` | Specific version |
+| `0.21` | Minor version |
+| `0` | Major version |
+
+```bash
+# Use specific version
+docker run -d -p 8080:8080 mcpuse/inspector:0.21.1
+
+# Always get latest stable
+docker run -d -p 8080:8080 mcpuse/inspector:latest
+```
+
+## Docker Compose
+
+For production deployments, use Docker Compose:
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  mcp-inspector:
+    image: mcpuse/inspector:latest
+    container_name: mcp-inspector
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - HOST=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/inspector/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+```
+
+<Steps>
+  <Step title="Create docker-compose.yml">
+    Save the configuration above to `docker-compose.yml`.
+  </Step>
+
+  <Step title="Start the Service">
+    ```bash
+    docker-compose up -d
+    ```
+  </Step>
+
+  <Step title="Verify Deployment">
+    ```bash
+    docker-compose ps
+    docker-compose logs -f mcp-inspector
+    ```
+  </Step>
+
+  <Step title="Access Inspector">
+    Open `http://localhost:8080` in your browser.
+  </Step>
+</Steps>
+
+## Environment Variables
+
+Configure the inspector with environment variables:
+
+### `NODE_ENV`
+
+Set the Node.js environment:
+
+```yaml
+environment:
+  - NODE_ENV=production
+```
+
+**Values:**
+- `production` - Optimized for production (default)
+- `development` - Development mode with verbose logging
+
+### `PORT`
+
+Port for the inspector to listen on:
+
+```yaml
+environment:
+  - PORT=8080
+ports:
+  - "8080:8080"
+```
+
+<Warning>
+  Make sure the `PORT` environment variable matches the exposed port in your container.
+</Warning>
+
+### `HOST`
+
+Host address to bind to:
+
+```yaml
+environment:
+  - HOST=0.0.0.0
+```
+
+**Values:**
+- `0.0.0.0` - Accept connections from any interface (required for Docker)
+- `127.0.0.1` - Only accept localhost connections
+
+## Production Configuration
+
+### With Nginx Reverse Proxy
+
+Run inspector behind Nginx for SSL and domain mapping:
+
+<CodeGroup>
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  mcp-inspector:
+    image: mcpuse/inspector:latest
+    container_name: mcp-inspector
+    expose:
+      - "8080"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - inspector-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: inspector-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - mcp-inspector
+    restart: unless-stopped
+    networks:
+      - inspector-network
+
+networks:
+  inspector-network:
+    driver: bridge
+```
+
+```nginx nginx.conf
+http {
+  upstream inspector {
+    server mcp-inspector:8080;
+  }
+
+  server {
+    listen 80;
+    server_name inspector.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+  }
+
+  server {
+    listen 443 ssl http2;
+    server_name inspector.yourdomain.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    location / {
+      proxy_pass http://inspector;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection 'upgrade';
+      proxy_set_header Host $host;
+      proxy_cache_bypass $http_upgrade;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+### With Traefik
+
+Use Traefik for automatic SSL with Let's Encrypt:
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@yourdomain.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  mcp-inspector:
+    image: mcpuse/inspector:latest
+    container_name: mcp-inspector
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.inspector.rule=Host(`inspector.yourdomain.com`)"
+      - "traefik.http.routers.inspector.entrypoints=websecure"
+      - "traefik.http.routers.inspector.tls.certresolver=letsencrypt"
+      - "traefik.http.services.inspector.loadbalancer.server.port=8080"
+    restart: unless-stopped
+```
+
+## Kubernetes Deployment
+
+Deploy to Kubernetes with Helm or kubectl:
+
+<CodeGroup>
+
+```yaml deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-inspector
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mcp-inspector
+  template:
+    metadata:
+      labels:
+        app: mcp-inspector
+    spec:
+      containers:
+      - name: inspector
+        image: mcpuse/inspector:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        livenessProbe:
+          httpGet:
+            path: /inspector/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /inspector/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-inspector
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: mcp-inspector
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+```
+
+```yaml ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-inspector
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - inspector.yourdomain.com
+    secretName: inspector-tls
+  rules:
+  - host: inspector.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mcp-inspector
+            port:
+              number: 80
+```
+
+</CodeGroup>
+
+Deploy:
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f ingress.yaml
+```
+
+## Security Considerations
+
+### Authentication
+
+The inspector doesn't include built-in authentication. Add it via reverse proxy:
+
+<Tabs>
+  <Tab title="Basic Auth (Nginx)">
+    ```nginx
+    location / {
+      auth_basic "MCP Inspector";
+      auth_basic_user_file /etc/nginx/.htpasswd;
+      
+      proxy_pass http://inspector:8080;
+      # ... other proxy settings
+    }
+    ```
+
+    Create password file:
+    ```bash
+    htpasswd -c .htpasswd admin
+    ```
+  </Tab>
+
+  <Tab title="OAuth (Traefik)">
+    ```yaml
+    labels:
+      - "traefik.http.middlewares.oauth.forwardauth.address=http://oauth-provider:4181"
+      - "traefik.http.routers.inspector.middlewares=oauth"
+    ```
+  </Tab>
+
+  <Tab title="mTLS (Kubernetes)">
+    ```yaml
+    annotations:
+      nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+      nginx.ingress.kubernetes.io/auth-tls-secret: "default/ca-secret"
+    ```
+  </Tab>
+</Tabs>
+
+### Network Isolation
+
+<Steps>
+  <Step title="Restrict Network Access">
+    Use firewall rules or security groups to limit access:
+    ```bash
+    # Only allow specific IPs
+    iptables -A INPUT -p tcp --dport 8080 -s 10.0.0.0/8 -j ACCEPT
+    iptables -A INPUT -p tcp --dport 8080 -j DROP
+    ```
+  </Step>
+
+  <Step title="Use Private Networks">
+    Deploy inspector in a private VPC/network:
+    ```yaml
+    networks:
+      inspector-network:
+        driver: bridge
+        internal: true
+    ```
+  </Step>
+
+  <Step title="VPN Access Only">
+    Require VPN connection to access inspector.
+  </Step>
+</Steps>
+
+## Monitoring
+
+### Health Checks
+
+The inspector exposes a health endpoint:
+
+```bash
+curl http://localhost:8080/inspector/health
+
+# Response:
+{"status": "ok"}
+```
+
+### Prometheus Metrics
+
+Add a metrics exporter for Prometheus:
+
+```yaml docker-compose.yml
+services:
+  mcp-inspector:
+    # ... inspector config
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+```
+
+### Logging
+
+Configure log aggregation:
+
+```yaml docker-compose.yml
+services:
+  mcp-inspector:
+    image: mcpuse/inspector:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Or use a log aggregator:
+
+```yaml
+services:
+  mcp-inspector:
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: mcp.inspector
+```
+
+## Backup and Recovery
+
+### Data Persistence
+
+The inspector stores data in browser localStorage, but you may want to backup session configurations:
+
+```bash
+# Export sessions from browser console
+JSON.stringify(localStorage)
+
+# Import sessions
+for (let key in data) {
+  localStorage.setItem(key, data[key]);
+}
+```
+
+### Container Backup
+
+```bash
+# Save container state
+docker commit mcp-inspector mcp-inspector-backup:$(date +%Y%m%d)
+
+# Save image
+docker save mcp-inspector-backup:20260219 | gzip > inspector-backup.tar.gz
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Container Won't Start" icon="circle-xmark">
+    **Check logs:**
+    ```bash
+    docker logs mcp-inspector
+    ```
+
+    **Common issues:**
+    - Port already in use
+    - Insufficient memory
+    - Network conflicts
+
+    **Solution:**
+    ```bash
+    # Use different port
+    docker run -p 9000:8080 mcpuse/inspector:latest
+    ```
+  </Accordion>
+
+  <Accordion title="High Memory Usage" icon="memory">
+    **Set resource limits:**
+    ```yaml
+    services:
+      mcp-inspector:
+        deploy:
+          resources:
+            limits:
+              memory: 512M
+            reservations:
+              memory: 256M
+    ```
+  </Accordion>
+
+  <Accordion title="SSL/TLS Issues" icon="lock">
+    **Verify certificates:**
+    ```bash
+    openssl s_client -connect inspector.yourdomain.com:443
+    ```
+
+    **Check Nginx logs:**
+    ```bash
+    docker logs inspector-nginx
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Updates
+
+Keep your inspector up to date:
+
+```bash
+# Pull latest image
+docker pull mcpuse/inspector:latest
+
+# Restart with new image
+docker-compose down
+docker-compose up -d
+
+# Verify version
+curl http://localhost:8080/inspector/health
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Features" icon="sparkles" href="/tools/inspector/features">
+    Explore all inspector capabilities
+  </Card>
+  <Card title="CLI Usage" icon="terminal" href="/tools/inspector/cli">
+    Learn about command-line options
+  </Card>
+</CardGroup>

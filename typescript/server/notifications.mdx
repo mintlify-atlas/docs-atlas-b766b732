@@ -1,0 +1,674 @@
+---
+title: 'Notifications'
+description: 'Send real-time updates to connected clients'
+icon: 'bell'
+---
+
+# Server Notifications
+
+Send real-time notifications to MCP clients. Notifications are one-way messages from server to client that don't expect a response.
+
+## Overview
+
+Notifications enable:
+- **Real-time updates** - Notify clients when data changes
+- **Broadcast messages** - Send custom notifications to all clients
+- **List change events** - Alert clients when tools/resources/prompts are added or removed
+- **Session targeting** - Send notifications to specific clients
+
+<Note>
+  Notifications only work in **stateful mode** with active client sessions. In stateless/edge environments, notification methods silently succeed but don't deliver messages.
+</Note>
+
+## Quick Start
+
+Send a notification to all connected clients:
+
+```typescript
+import { MCPServer } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+// Send notification to all clients
+await server.sendNotification('custom/hello', {
+  message: 'Hello from server!',
+  timestamp: new Date().toISOString()
+});
+```
+
+## Basic Notifications
+
+### Broadcast to All Clients
+
+Send a notification to all connected clients:
+
+```typescript
+server.tool(
+  {
+    name: 'broadcast-message',
+    description: 'Send a message to all connected clients',
+    schema: z.object({
+      message: z.string()
+    })
+  },
+  async ({ message }) => {
+    // Send to all clients
+    await server.sendNotification('custom/broadcast', {
+      message,
+      timestamp: new Date().toISOString(),
+      sender: 'server'
+    });
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `Broadcast sent to ${server.getActiveSessions().length} client(s)`
+      }]
+    };
+  }
+);
+```
+
+### Send to Specific Client
+
+Target a specific client session:
+
+```typescript
+server.tool(
+  {
+    name: 'notify-client',
+    schema: z.object({
+      sessionId: z.string(),
+      message: z.string()
+    })
+  },
+  async ({ sessionId, message }) => {
+    // Send to specific session
+    const sent = await server.sendNotificationToSession(
+      sessionId,
+      'custom/direct-message',
+      { message }
+    );
+    
+    if (!sent) {
+      return { error: 'Session not found' };
+    }
+    
+    return { success: true };
+  }
+);
+```
+
+## Session Management
+
+### Get Active Sessions
+
+List all connected client sessions:
+
+```typescript
+server.tool(
+  {
+    name: 'list-sessions',
+    description: 'List all connected clients'
+  },
+  async () => {
+    const sessions = server.getActiveSessions();
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `${sessions.length} active session(s): ${sessions.join(', ')}`
+      }]
+    };
+  }
+);
+```
+
+### Iterate Over Sessions
+
+Send different messages to different clients:
+
+```typescript
+const sessions = server.getActiveSessions();
+
+sessions.forEach(async (sessionId, index) => {
+  await server.sendNotificationToSession(
+    sessionId,
+    'custom/welcome',
+    {
+      message: `Hello client #${index + 1}!`,
+      clientNumber: index + 1
+    }
+  );
+});
+```
+
+## Standard Notifications
+
+### Tools List Changed
+
+Notify clients to refresh their tools cache:
+
+```typescript
+// Add a new tool dynamically
+server.tool(
+  { name: 'new-tool', description: 'New tool' },
+  async () => ({ content: [{ type: 'text', text: 'Hello' }] })
+);
+
+// Notify all clients that tools changed
+await server.sendToolsListChanged();
+```
+
+### Resources List Changed
+
+Notify clients to refresh their resources cache:
+
+```typescript
+// Add a new resource dynamically
+server.resource(
+  { name: 'new-resource', uri: 'app://new' },
+  async () => ({ content: [{ type: 'text', text: 'Data' }] })
+);
+
+// Notify all clients
+await server.sendResourcesListChanged();
+```
+
+### Prompts List Changed
+
+Notify clients to refresh their prompts cache:
+
+```typescript
+// Add a new prompt dynamically
+server.prompt(
+  { name: 'new-prompt', description: 'New prompt' },
+  async () => ({
+    messages: [{
+      role: 'user',
+      content: { type: 'text', text: 'Hello' }
+    }]
+  })
+);
+
+// Notify all clients
+await server.sendPromptsListChanged();
+```
+
+## Custom Notifications
+
+### Notification Format
+
+Notifications follow the JSON-RPC 2.0 format:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "custom/my-notification",
+  "params": {
+    "key": "value",
+    "timestamp": "2025-02-19T10:30:00Z"
+  }
+}
+```
+
+### Notification Methods
+
+Use custom method names with prefixes:
+
+```typescript
+// Good - Custom prefix
+await server.sendNotification('custom/status-update', { status: 'online' });
+await server.sendNotification('custom/data-changed', { id: 123 });
+await server.sendNotification('app/new-message', { message: 'Hello' });
+
+// Standard MCP notifications
+await server.sendNotification('notifications/tools/list_changed');
+await server.sendNotification('notifications/resources/list_changed');
+```
+
+### Notification Parameters
+
+Pass any JSON-serializable data:
+
+```typescript
+await server.sendNotification('custom/user-event', {
+  event: 'login',
+  userId: '123',
+  timestamp: new Date().toISOString(),
+  metadata: {
+    ip: '192.168.1.1',
+    userAgent: 'Chrome/120.0'
+  },
+  tags: ['login', 'success']
+});
+```
+
+## Real-Time Updates
+
+### Periodic Updates
+
+Send updates on a schedule:
+
+```typescript
+const server = new MCPServer({
+  name: 'live-server',
+  version: '1.0.0'
+});
+
+let updateCount = 0;
+
+// Send heartbeat every 15 seconds
+const heartbeat = setInterval(async () => {
+  const sessions = server.getActiveSessions();
+  
+  if (sessions.length > 0) {
+    updateCount++;
+    await server.sendNotification('custom/heartbeat', {
+      count: updateCount,
+      connectedClients: sessions.length,
+      timestamp: new Date().toISOString()
+    });
+  }
+}, 15000);
+
+// Cleanup on shutdown
+process.on('SIGINT', () => {
+  clearInterval(heartbeat);
+  process.exit(0);
+});
+
+await server.listen();
+```
+
+### Data Change Events
+
+Notify when data changes:
+
+```typescript
+let cachedData = { value: 0 };
+
+server.resource(
+  {
+    name: 'live-data',
+    uri: 'app://live-data',
+    title: 'Live Data Stream'
+  },
+  async () => ({
+    content: [{
+      type: 'text',
+      text: JSON.stringify(cachedData)
+    }]
+  })
+);
+
+// Update data periodically
+setInterval(async () => {
+  cachedData.value++;
+  
+  // Notify all clients that resource changed
+  await server.sendNotification('notifications/resources/updated', {
+    uri: 'app://live-data'
+  });
+}, 5000);
+```
+
+### Event-Driven Notifications
+
+Send notifications based on external events:
+
+```typescript
+import { EventEmitter } from 'events';
+
+const events = new EventEmitter();
+
+// Listen for external events
+events.on('order-created', async (order) => {
+  await server.sendNotification('custom/order-created', {
+    orderId: order.id,
+    userId: order.userId,
+    total: order.total,
+    timestamp: new Date().toISOString()
+  });
+});
+
+events.on('order-shipped', async (order) => {
+  await server.sendNotification('custom/order-shipped', {
+    orderId: order.id,
+    trackingNumber: order.trackingNumber,
+    timestamp: new Date().toISOString()
+  });
+});
+```
+
+## Client → Server Notifications
+
+### Roots Changed
+
+Handle root directory changes from clients:
+
+```typescript
+server.onRootsChanged(async (roots) => {
+  console.log(`Client roots updated: ${roots.length} root(s)`);
+  
+  roots.forEach(root => {
+    console.log(`  - ${root.name || 'unnamed'}: ${root.uri}`);
+  });
+  
+  // Respond to root changes
+  await server.sendNotification('custom/roots-acknowledged', {
+    count: roots.length,
+    timestamp: new Date().toISOString()
+  });
+});
+```
+
+## Advanced Patterns
+
+### Conditional Notifications
+
+Send notifications based on conditions:
+
+```typescript
+server.tool(
+  {
+    name: 'update-status',
+    schema: z.object({
+      status: z.enum(['online', 'away', 'offline'])
+    })
+  },
+  async ({ status }) => {
+    // Only notify if status changed to offline
+    if (status === 'offline') {
+      await server.sendNotification('custom/user-offline', {
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return { success: true };
+  }
+);
+```
+
+### Throttled Notifications
+
+Limit notification frequency:
+
+```typescript
+let lastNotification = 0;
+const THROTTLE_MS = 5000; // 5 seconds
+
+function notifyThrottled(method: string, params: any) {
+  const now = Date.now();
+  
+  if (now - lastNotification >= THROTTLE_MS) {
+    lastNotification = now;
+    server.sendNotification(method, params);
+  }
+}
+
+// Usage
+notifyThrottled('custom/update', { data: 'value' });
+```
+
+### User-Specific Notifications
+
+Send notifications based on user identity:
+
+```typescript
+const userSessions = new Map<string, string>(); // userId -> sessionId
+
+server.tool(
+  {
+    name: 'register-session',
+    description: 'Register user session'
+  },
+  async (params, ctx) => {
+    const userId = ctx.auth.user.userId;
+    const sessions = server.getActiveSessions();
+    
+    // Store mapping (simplified - need to identify current session)
+    userSessions.set(userId, sessions[0]);
+    
+    return { success: true };
+  }
+);
+
+async function notifyUser(userId: string, method: string, params: any) {
+  const sessionId = userSessions.get(userId);
+  
+  if (sessionId) {
+    await server.sendNotificationToSession(sessionId, method, params);
+  }
+}
+
+// Usage
+await notifyUser('user-123', 'custom/message', { text: 'Hello!' });
+```
+
+## Notification Methods Reference
+
+### sendNotification
+
+<ParamField path="method" type="string" required>
+  Notification method name (e.g., 'custom/hello')
+</ParamField>
+
+<ParamField path="params" type="object">
+  Optional parameters to include in the notification
+</ParamField>
+
+```typescript
+await server.sendNotification('custom/event', { data: 'value' });
+```
+
+### sendNotificationToSession
+
+<ParamField path="sessionId" type="string" required>
+  Target session ID from getActiveSessions()
+</ParamField>
+
+<ParamField path="method" type="string" required>
+  Notification method name
+</ParamField>
+
+<ParamField path="params" type="object">
+  Optional parameters
+</ParamField>
+
+<ParamField path="returns" type="boolean">
+  True if notification was sent, false if session not found
+</ParamField>
+
+```typescript
+const sent = await server.sendNotificationToSession(
+  'session-123',
+  'custom/message',
+  { text: 'Hello' }
+);
+```
+
+### getActiveSessions
+
+Returns array of active session IDs:
+
+```typescript
+const sessions = server.getActiveSessions();
+// Returns: ['session-1', 'session-2', ...]
+```
+
+### sendToolsListChanged
+
+Convenience method for `notifications/tools/list_changed`:
+
+```typescript
+await server.sendToolsListChanged();
+```
+
+### sendResourcesListChanged
+
+Convenience method for `notifications/resources/list_changed`:
+
+```typescript
+await server.sendResourcesListChanged();
+```
+
+### sendPromptsListChanged
+
+Convenience method for `notifications/prompts/list_changed`:
+
+```typescript
+await server.sendPromptsListChanged();
+```
+
+## Best Practices
+
+### 1. Check Session Count
+
+Avoid unnecessary work when no clients are connected:
+
+```typescript
+const sessions = server.getActiveSessions();
+
+if (sessions.length > 0) {
+  // Only compute data if clients are listening
+  const data = await computeExpensiveData();
+  await server.sendNotification('custom/update', { data });
+}
+```
+
+### 2. Handle Errors Gracefully
+
+Notifications can fail silently:
+
+```typescript
+try {
+  await server.sendNotification('custom/update', { data });
+} catch (err) {
+  console.error('Failed to send notification:', err);
+  // Continue execution - notification failure shouldn't break the app
+}
+```
+
+### 3. Use Descriptive Method Names
+
+Make notification purpose clear:
+
+```typescript
+// Good
+'custom/user-logged-in'
+'custom/order-status-changed'
+'custom/data-sync-complete'
+
+// Less good
+'custom/event'
+'custom/update'
+'custom/notification'
+```
+
+### 4. Include Timestamps
+
+Help clients correlate events:
+
+```typescript
+await server.sendNotification('custom/event', {
+  type: 'status-change',
+  status: 'active',
+  timestamp: new Date().toISOString()
+});
+```
+
+## Complete Example
+
+See `examples/server/features/notifications/src/server.ts` for a full example:
+
+```typescript
+import { MCPServer } from 'mcp-use/server';
+import z from 'zod';
+
+let currentMode: 'ping' | 'pong' = 'ping';
+
+const server = new MCPServer({
+  name: 'notification-example',
+  version: '1.0.0'
+});
+
+// Tool that changes mode and notifies clients
+server.tool(
+  {
+    name: 'toggle-mode',
+    description: 'Toggle mode and notify all clients'
+  },
+  async () => {
+    const oldMode = currentMode;
+    currentMode = currentMode === 'ping' ? 'pong' : 'ping';
+    
+    // Notify clients to refresh tools list
+    await server.sendNotification('notifications/tools/list_changed');
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `Mode changed from ${oldMode} to ${currentMode}`
+      }]
+    };
+  }
+);
+
+// Broadcast tool
+server.tool(
+  {
+    name: 'broadcast',
+    schema: z.object({ message: z.string() })
+  },
+  async ({ message }) => {
+    const sessions = server.getActiveSessions();
+    
+    await server.sendNotification('custom/broadcast', {
+      message,
+      timestamp: new Date().toISOString()
+    });
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `Broadcast sent to ${sessions.length} client(s)`
+      }]
+    };
+  }
+);
+
+// Welcome notification after 5 seconds
+setTimeout(async () => {
+  const sessions = server.getActiveSessions();
+  
+  sessions.forEach(async (sessionId, index) => {
+    await server.sendNotificationToSession(sessionId, 'custom/welcome', {
+      message: `Hello client #${index + 1}!`,
+      clientNumber: index + 1
+    });
+  });
+}, 5000);
+
+await server.listen();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Widgets" icon="window" href="/typescript/server/widgets">
+    Create interactive UIs
+  </Card>
+  <Card title="OAuth" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+  <Card title="Sampling" icon="sparkles" href="/typescript/server/sampling">
+    LLM integration
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

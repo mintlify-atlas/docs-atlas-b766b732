@@ -1,0 +1,353 @@
+---
+title: "Basic Agent Usage"
+description: "Fundamental agent operations and patterns"
+icon: "play"
+---
+
+## Basic Agent Pattern
+
+The standard workflow for using MCPAgent:
+
+```python
+import asyncio
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+load_dotenv()
+
+async def main():
+    # 1. Configure servers
+    config = {
+        "mcpServers": {
+            "filesystem": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+            }
+        }
+    }
+    
+    # 2. Create client
+    client = MCPClient(config=config)
+    
+    # 3. Create LLM
+    llm = ChatOpenAI(model="gpt-4o")
+    
+    # 4. Create agent
+    agent = MCPAgent(llm=llm, client=client, max_steps=20)
+    
+    # 5. Run query
+    result = await agent.run("List files in /tmp and read package.json if it exists")
+    print(result)
+    
+    # 6. Cleanup
+    await client.close_all_sessions()
+
+asyncio.run(main())
+```
+
+## Running Queries
+
+### Simple Query
+
+```python
+result = await agent.run("What is 2 + 2?")
+print(result)  # "4"
+```
+
+### Complex Query
+
+```python
+result = await agent.run(\"\"\"
+Research the latest developments in quantum computing,
+summarize the key points, and save them to a file.
+\"\"\")
+```
+
+### Query with Context
+
+```python
+result = await agent.run(
+    \"\"\"Based on the current project files, identify potential
+    security vulnerabilities and suggest improvements.\"\"\"
+)
+```
+
+## Max Steps Configuration
+
+Control how many reasoning steps the agent can take:
+
+```python
+# Short queries (faster, cheaper)
+agent = MCPAgent(llm=llm, client=client, max_steps=5)
+result = await agent.run("Quick question")
+
+# Complex queries (more thorough)
+agent = MCPAgent(llm=llm, client=client, max_steps=50)
+result = await agent.run("Complex research task")
+
+# Override per query
+result = await agent.run("Special task", max_steps=100)
+```
+
+## Working with Different LLMs
+
+### OpenAI
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0.7,
+    max_tokens=2000
+)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+### Anthropic Claude
+
+```python
+from langchain_anthropic import ChatAnthropic
+
+llm = ChatAnthropic(
+    model="claude-sonnet-4-5",
+    temperature=0.7,
+    max_tokens=4000
+)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+### Google Gemini
+
+```python
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash-exp",
+    temperature=0.7
+)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+## Tool Restrictions
+
+Limit which tools the agent can use:
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    disallowed_tools=["delete_file", "execute_command"]
+)
+
+# Agent cannot use restricted tools
+result = await agent.run("Clean up temporary files")
+# Agent will find alternative approaches
+```
+
+## Custom System Prompts
+
+### Override Default Prompt
+
+```python
+custom_prompt = \"\"\"
+You are a helpful assistant specialized in data analysis.
+Always provide statistical insights when working with data.
+Be concise and focus on actionable recommendations.
+\"\"\"
+
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    system_prompt=custom_prompt
+)
+```
+
+### Add Additional Instructions
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    additional_instructions=\"\"\"
+    Always ask for confirmation before modifying files.
+    Prefer safe, reversible operations.
+    \"\"\"
+)
+```
+
+## Error Handling
+
+### Basic Error Handling
+
+```python
+try:
+    result = await agent.run("Risky operation")
+    print(f"Success: {result}")
+except Exception as e:
+    print(f"Error: {e}")
+finally:
+    await client.close_all_sessions()
+```
+
+### Retry on Failure
+
+```python
+import asyncio
+
+async def run_with_retry(agent, query, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            result = await agent.run(query)
+            return result
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} failed, retrying...")
+                await asyncio.sleep(2)
+            else:
+                raise
+
+result = await run_with_retry(agent, "Query")
+```
+
+## Verbose Mode
+
+Enable detailed logging:
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    verbose=True,        # Show agent decisions
+    pretty_print=True    # Format output nicely
+)
+
+result = await agent.run("Complex query")
+# Outputs detailed execution steps
+```
+
+## Using Direct Connectors
+
+Skip MCPClient and use connectors directly:
+
+```python
+from mcp_use.client.connectors.stdio import StdioConnector
+
+connector = StdioConnector(
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+)
+
+agent = MCPAgent(
+    llm=llm,
+    connectors=[connector],
+    max_steps=20
+)
+
+result = await agent.run("List files")
+await agent.close()
+```
+
+## Agent with Multiple Servers
+
+```python
+config = {
+    "mcpServers": {
+        "browser": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"]
+        },
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+        }
+    }
+}
+
+client = MCPClient(config=config)
+agent = MCPAgent(llm=llm, client=client)
+
+# Agent automatically uses appropriate tools
+result = await agent.run(
+    "Search for Python tutorials and save the URLs to a file"
+)
+```
+
+## Structured Output
+
+Get results in a specific format:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List
+
+class ResearchResult(BaseModel):
+    topic: str = Field(description="Research topic")
+    key_points: List[str] = Field(description="Main findings")
+    sources: List[str] = Field(description="Source URLs")
+
+result = await agent.run(
+    "Research Python async best practices",
+    output_schema=ResearchResult
+)
+
+# result is a ResearchResult instance
+print(f"Topic: {result.topic}")
+print(f"Key points: {result.key_points}")
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Clear, Specific Queries">
+    Provide detailed instructions:
+    ```python
+    # Good
+    "Search Google for 'Python asyncio tutorial', read the top 3 results, and summarize key concepts"
+    
+    # Avoid
+    "Learn about asyncio"
+    ```
+  </Accordion>
+
+  <Accordion title="Appropriate Max Steps">
+    Match complexity to task:
+    ```python
+    # Simple: 5-10 steps
+    agent = MCPAgent(llm=llm, client=client, max_steps=10)
+    
+    # Complex: 30-50 steps
+    agent = MCPAgent(llm=llm, client=client, max_steps=50)
+    ```
+  </Accordion>
+
+  <Accordion title="Always Cleanup">
+    Close sessions when done:
+    ```python
+    try:
+        result = await agent.run(query)
+    finally:
+        await client.close_all_sessions()
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Costs">
+    Be aware of API costs with max_steps:
+    ```python
+    # More steps = more LLM calls = higher cost
+    agent = MCPAgent(llm=llm, client=client, max_steps=5)  # Cost-effective
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="stream" href="/python/agent/streaming">
+    Learn about streaming execution
+  </Card>
+  <Card title="Memory" icon="database" href="/python/agent/memory">
+    Manage conversation history
+  </Card>
+</CardGroup>

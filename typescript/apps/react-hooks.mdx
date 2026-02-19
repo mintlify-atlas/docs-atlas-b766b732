@@ -1,0 +1,632 @@
+---
+title: "React Hooks"
+description: "React hooks for MCP widget development"
+---
+
+# React Hooks
+
+mcp-use provides specialized React hooks for building interactive MCP widgets.
+
+## useWidget
+
+The primary hook for accessing widget state and platform APIs.
+
+### Basic Usage
+
+```tsx
+import { useWidget } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const { props, isPending } = useWidget<MyProps>()
+
+  if (isPending) {
+    return <div>Loading...</div>
+  }
+
+  return <div>{props.title}</div>
+}
+```
+
+### Type Signature
+
+```typescript
+function useWidget<
+  TProps extends UnknownObject = UnknownObject,
+  TOutput extends UnknownObject = UnknownObject,
+  TMetadata extends UnknownObject = UnknownObject,
+  TState extends UnknownObject = UnknownObject,
+  TToolInput extends UnknownObject = UnknownObject
+>(defaultProps?: TProps): UseWidgetResult<TProps, TOutput, TMetadata, TState, TToolInput>
+```
+
+### Return Value
+
+```typescript
+interface UseWidgetResult<TProps, TOutput, TMetadata, TState, TToolInput> {
+  // Props and State
+  props: Partial<TProps>              // Widget props from _meta["mcp-use/props"]
+  toolInput: TToolInput               // Original tool arguments
+  output: TOutput | null              // Tool output data
+  metadata: TMetadata | null          // Tool response metadata
+  state: TState | null                // Persistent widget state
+  setState: (state: TState | ((prev: TState | null) => TState)) => Promise<void>
+
+  // Layout and Theme
+  theme: Theme                        // "light" | "dark"
+  displayMode: DisplayMode            // "inline" | "fullscreen" | "popover"
+  safeArea: SafeArea                  // Safe area insets (notches, etc.)
+  maxHeight: number                   // Maximum widget height in pixels
+  maxWidth: number | undefined        // Maximum widget width in pixels
+  userAgent: UserAgent                // Device type and capabilities
+  locale: string                      // User's locale (e.g., "en-US")
+  timeZone: string                    // User's timezone (e.g., "America/New_York")
+  mcp_url: string                     // Base URL of MCP server
+
+  // Actions
+  callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResponse>
+  sendFollowUpMessage: (prompt: string) => Promise<void>
+  openExternal: (href: string) => void
+  requestDisplayMode: (mode: DisplayMode) => Promise<{ mode: DisplayMode }>
+
+  // Availability
+  isAvailable: boolean                // Platform API is available
+  isPending: boolean                  // Tool is still executing
+  isStreaming: boolean                // Tool arguments are being streamed
+  partialToolInput: Partial<TToolInput> | null  // Partial tool input during streaming
+}
+```
+
+### Examples
+
+#### Access Widget Props
+
+```tsx
+import { useWidget } from 'mcp-use/react'
+import { z } from 'zod'
+
+const propSchema = z.object({
+  title: z.string(),
+  count: z.number()
+})
+
+type Props = z.infer<typeof propSchema>
+
+const Counter = () => {
+  const { props } = useWidget<Props>()
+
+  return (
+    <div>
+      <h1>{props.title}</h1>
+      <p>Count: {props.count}</p>
+    </div>
+  )
+}
+```
+
+#### Handle Loading State
+
+```tsx
+const MyWidget = () => {
+  const { isPending, props } = useWidget<Props>()
+
+  if (isPending) {
+    return (
+      <div className="flex justify-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
+  return <div>{props.data}</div>
+}
+```
+
+#### Call Tools
+
+```tsx
+const WeatherWidget = () => {
+  const { props, callTool } = useWidget<WeatherProps>()
+
+  const handleRefresh = async () => {
+    try {
+      const result = await callTool('get-weather', {
+        city: props.city
+      })
+      console.log('Weather updated:', result)
+    } catch (error) {
+      console.error('Failed to refresh:', error)
+    }
+  }
+
+  return (
+    <div>
+      <h2>{props.city}</h2>
+      <button onClick={handleRefresh}>Refresh</button>
+    </div>
+  )
+}
+```
+
+#### Manage State
+
+```tsx
+const FavoritesWidget = () => {
+  const { props, state, setState } = useWidget<
+    CityProps,
+    any,
+    any,
+    { favorites: string[] }
+  >()
+
+  const addFavorite = async () => {
+    await setState(prev => ({
+      favorites: [...(prev?.favorites || []), props.city]
+    }))
+  }
+
+  const removeFavorite = async (city: string) => {
+    await setState(prev => ({
+      favorites: prev?.favorites?.filter(c => c !== city) || []
+    }))
+  }
+
+  return (
+    <div>
+      <h2>{props.city}</h2>
+      <button onClick={addFavorite}>Add to Favorites</button>
+      <ul>
+        {state?.favorites?.map(city => (
+          <li key={city}>
+            {city}
+            <button onClick={() => removeFavorite(city)}>Remove</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+<Warning>
+  State persistence is only supported in ChatGPT (Apps SDK). In Claude Desktop, state is local to the widget instance.
+</Warning>
+
+#### Send Follow-up Messages
+
+```tsx
+const SearchWidget = () => {
+  const { props, sendFollowUpMessage } = useWidget<SearchProps>()
+
+  const handleAsk = async (query: string) => {
+    await sendFollowUpMessage(`Tell me more about ${query}`)
+  }
+
+  return (
+    <div>
+      {props.results.map(result => (
+        <div key={result.id}>
+          <h3>{result.title}</h3>
+          <button onClick={() => handleAsk(result.title)}>
+            Learn More
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+#### Open External Links
+
+```tsx
+const ProductWidget = () => {
+  const { props, openExternal } = useWidget<ProductProps>()
+
+  return (
+    <div>
+      <h2>{props.name}</h2>
+      <button onClick={() => openExternal(props.url)}>
+        View Product
+      </button>
+    </div>
+  )
+}
+```
+
+#### Request Display Mode
+
+```tsx
+const ImageGallery = () => {
+  const { displayMode, requestDisplayMode } = useWidget()
+
+  const handleFullscreen = async () => {
+    await requestDisplayMode('fullscreen')
+  }
+
+  return (
+    <div>
+      <p>Current mode: {displayMode}</p>
+      <button onClick={handleFullscreen}>View Fullscreen</button>
+    </div>
+  )
+}
+```
+
+#### Stream Tool Arguments
+
+```tsx
+const StreamingWidget = () => {
+  const { isPending, isStreaming, partialToolInput, toolInput } = useWidget<{
+    query: string
+    filters?: string[]
+  }>()
+
+  if (isPending) {
+    if (isStreaming && partialToolInput) {
+      // Show partial data as it streams in
+      return (
+        <div>
+          <p>Streaming...</p>
+          <p>Query: {partialToolInput.query || '...'}</p>
+          <p>Filters: {partialToolInput.filters?.join(', ') || '...'}</p>
+        </div>
+      )
+    }
+    return <div>Waiting for data...</div>
+  }
+
+  return (
+    <div>
+      <p>Query: {toolInput.query}</p>
+      <p>Filters: {toolInput.filters?.join(', ')}</p>
+    </div>
+  )
+}
+```
+
+<Note>
+  Streaming is only available in MCP Apps-compatible clients (Claude Desktop). ChatGPT does not support argument streaming.
+</Note>
+
+## useCallTool
+
+A specialized hook for calling MCP tools with TanStack Query-like state management.
+
+### Type Signature
+
+```typescript
+function useCallTool<TArgs, TResponse>(
+  name: string
+): UseCallToolReturn<TArgs, TResponse>
+
+interface UseCallToolReturn<TArgs, TResponse> {
+  // State
+  status: 'idle' | 'pending' | 'success' | 'error'
+  isIdle: boolean
+  isPending: boolean
+  isSuccess: boolean
+  isError: boolean
+  data: TResponse | undefined
+  error: unknown | undefined
+
+  // Methods
+  callTool: CallToolFn<TArgs, TResponse>       // Fire-and-forget with callbacks
+  callToolAsync: CallToolAsyncFn<TArgs, TResponse>  // Returns Promise
+}
+```
+
+### Basic Usage
+
+```tsx
+import { useCallTool } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const { callTool, isPending, data } = useCallTool('get-weather')
+
+  const handleClick = () => {
+    callTool({ city: 'Tokyo' })
+  }
+
+  return (
+    <div>
+      <button onClick={handleClick} disabled={isPending}>
+        Get Weather
+      </button>
+      {data && <p>{data.text}</p>}
+    </div>
+  )
+}
+```
+
+### With Type Safety
+
+When using `mcp-use dev`, types are auto-generated from your tool definitions:
+
+```tsx
+import { useCallTool } from 'mcp-use/react'
+
+// Types are automatically inferred from your server's tool definition
+const MyWidget = () => {
+  const { callTool, data } = useCallTool('search-flights')
+  // callTool is typed: (args: { destination: string, date: string }) => void
+  // data is typed based on your tool's output schema
+
+  return (
+    <button onClick={() => callTool({ destination: 'NYC', date: '2025-03-01' })}>
+      Search Flights
+    </button>
+  )
+}
+```
+
+### Fire-and-Forget with Callbacks
+
+```tsx
+const MyWidget = () => {
+  const { callTool } = useCallTool('send-email')
+
+  const handleSend = () => {
+    callTool(
+      { to: 'user@example.com', subject: 'Hello' },
+      {
+        onSuccess: (data) => {
+          console.log('Email sent:', data)
+        },
+        onError: (error) => {
+          console.error('Failed to send:', error)
+        },
+        onSettled: (data, error) => {
+          console.log('Request completed')
+        }
+      }
+    )
+  }
+
+  return <button onClick={handleSend}>Send Email</button>
+}
+```
+
+### Async/Await
+
+```tsx
+const MyWidget = () => {
+  const { callToolAsync } = useCallTool('process-data')
+
+  const handleProcess = async () => {
+    try {
+      const result = await callToolAsync({ data: 'test' })
+      console.log('Result:', result)
+    } catch (error) {
+      console.error('Error:', error)
+    }
+  }
+
+  return <button onClick={handleProcess}>Process</button>
+}
+```
+
+### State-Based Rendering
+
+```tsx
+const MyWidget = () => {
+  const { callTool, status, data, error } = useCallTool('search')
+
+  return (
+    <div>
+      <button onClick={() => callTool({ query: 'test' })}>
+        Search
+      </button>
+
+      {status === 'idle' && <p>Click to search</p>}
+      {status === 'pending' && <p>Searching...</p>}
+      {status === 'success' && <p>Found {data.results.length} results</p>}
+      {status === 'error' && <p>Error: {String(error)}</p>}
+    </div>
+  )
+}
+```
+
+## useMcp
+
+Connect to MCP servers from client-side applications.
+
+### Type Signature
+
+```typescript
+function useMcp(options: UseMcpOptions): UseMcpResult
+
+interface UseMcpOptions {
+  url?: string                        // MCP server URL
+  enabled?: boolean                   // Enable/disable connection
+  headers?: Record<string, string>    // Custom headers
+  autoReconnect?: boolean | number    // Auto-reconnect on disconnect
+  onSampling?: (params: CreateMessageRequest) => Promise<CreateMessageResult>
+  onElicitation?: (params: ElicitRequest) => Promise<ElicitResult>
+  // ... see full options in API docs
+}
+
+interface UseMcpResult {
+  // Connection State
+  state: 'discovering' | 'pending_auth' | 'authenticating' | 'ready' | 'failed'
+  error?: string
+  serverInfo?: ServerInfo
+  capabilities?: Record<string, any>
+
+  // Resources
+  tools: Tool[]
+  resources: Resource[]
+  resourceTemplates: ResourceTemplate[]
+  prompts: Prompt[]
+
+  // Actions
+  callTool: (name: string, args?: Record<string, unknown>) => Promise<any>
+  readResource: (uri: string) => Promise<ResourceContent>
+  getPrompt: (name: string, args?: Record<string, string>) => Promise<PromptMessages>
+
+  // Connection Management
+  connect: () => void
+  disconnect: () => void
+  retry: () => void
+  authenticate: () => void
+
+  // Client Instance
+  client: BrowserMCPClient | null
+}
+```
+
+### Basic Usage
+
+```tsx
+import { useMcp } from 'mcp-use/react'
+import { useEffect } from 'react'
+
+const MyApp = () => {
+  const mcp = useMcp({
+    url: 'http://localhost:3000/mcp'
+  })
+
+  useEffect(() => {
+    if (mcp.state === 'ready') {
+      console.log('Connected!', mcp.tools)
+    }
+  }, [mcp.state])
+
+  const handleCallTool = async () => {
+    const result = await mcp.callTool('my-tool', { arg: 'value' })
+    console.log(result)
+  }
+
+  return (
+    <div>
+      <p>Status: {mcp.state}</p>
+      {mcp.state === 'ready' && (
+        <button onClick={handleCallTool}>Call Tool</button>
+      )}
+    </div>
+  )
+}
+```
+
+### With Authentication
+
+```tsx
+const MyApp = () => {
+  const mcp = useMcp({
+    url: 'https://api.example.com/mcp',
+    preventAutoAuth: true  // Don't auto-trigger OAuth
+  })
+
+  if (mcp.state === 'pending_auth') {
+    return (
+      <div>
+        <p>Authentication required</p>
+        <button onClick={() => mcp.authenticate()}>
+          Sign In
+        </button>
+      </div>
+    )
+  }
+
+  return <div>Connected</div>
+}
+```
+
+### Error Handling
+
+```tsx
+const MyApp = () => {
+  const mcp = useMcp({
+    url: 'http://localhost:3000/mcp',
+    autoRetry: true
+  })
+
+  if (mcp.state === 'failed') {
+    return (
+      <div>
+        <p>Connection failed: {mcp.error}</p>
+        <button onClick={() => mcp.retry()}>Retry</button>
+      </div>
+    )
+  }
+
+  return <div>Status: {mcp.state}</div>
+}
+```
+
+## Helper Hooks
+
+mcp-use provides convenience hooks for common use cases.
+
+### useWidgetProps
+
+Get just the props (most common use case):
+
+```tsx
+import { useWidgetProps } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const props = useWidgetProps<{ title: string; count: number }>()
+
+  return (
+    <div>
+      <h1>{props.title}</h1>
+      <p>{props.count}</p>
+    </div>
+  )
+}
+```
+
+### useWidgetTheme
+
+Get just the theme:
+
+```tsx
+import { useWidgetTheme } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const theme = useWidgetTheme()  // "light" | "dark"
+
+  return (
+    <div className={theme === 'dark' ? 'dark-mode' : 'light-mode'}>
+      Theme: {theme}
+    </div>
+  )
+}
+```
+
+### useWidgetState
+
+Get and set widget state:
+
+```tsx
+import { useWidgetState } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const [favorites, setFavorites] = useWidgetState<string[]>([])
+
+  const addFavorite = (item: string) => {
+    setFavorites(prev => [...(prev || []), item])
+  }
+
+  return (
+    <div>
+      <p>Favorites: {favorites?.join(', ')}</p>
+      <button onClick={() => addFavorite('Item')}>Add</button>
+    </div>
+  )
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Widgets" icon="wand-magic-sparkles" href="/typescript/apps/creating-widgets">
+    Build your first widget step-by-step
+  </Card>
+  <Card title="Theming" icon="palette" href="/typescript/apps/theming">
+    Style widgets with dark mode support
+  </Card>
+  <Card title="API Reference" icon="code" href="/typescript/api/react-hooks">
+    Complete API documentation
+  </Card>
+</CardGroup>

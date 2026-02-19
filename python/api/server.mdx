@@ -1,0 +1,182 @@
+---
+title: "Server API Reference"
+description: "Complete MCPServer API documentation"
+icon: "book"
+---
+
+## MCPServer
+
+Main class for creating MCP servers.
+
+### Constructor
+
+```python
+MCPServer(
+    name: str | None = None,
+    version: str | None = None,
+    instructions: str | None = None,
+    auth: BearerAuthProvider | None = None,
+    middleware: list[Middleware] | None = None,
+    debug: bool = False,
+    mcp_path: str = "/mcp",
+    docs_path: str = "/docs",
+    inspector_path: str = "/inspector",
+    openmcp_path: str = "/openmcp.json",
+    show_inspector_logs: bool = False,
+    pretty_print_jsonrpc: bool = False,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    dns_rebinding_protection: bool = False
+)
+```
+
+<ParamField path="name" type="str">
+  Server name for identification
+</ParamField>
+
+<ParamField path="version" type="str">
+  Server version string
+</ParamField>
+
+<ParamField path="instructions" type="str">
+  Instructions for AI models
+</ParamField>
+
+<ParamField path="auth" type="BearerAuthProvider">
+  Authentication provider
+</ParamField>
+
+<ParamField path="middleware" type="list[Middleware]">
+  Middleware instances
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  Enable debug mode
+</ParamField>
+
+<ParamField path="host" type="str" default="0.0.0.0">
+  Host to bind to
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  Port to bind to
+</ParamField>
+
+### Methods
+
+#### tool()
+
+```python
+@server.tool(
+    name: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    annotations: ToolAnnotations | None = None,
+    structured_output: bool = False
+)
+def my_tool(param: str) -> str:
+    return f"Result: {param}"
+```
+
+Define a server tool.
+
+#### resource()
+
+```python
+@server.resource(
+    uri: str,
+    name: str,
+    title: str | None = None,
+    description: str | None = None,
+    mime_type: str | None = None
+)
+def my_resource() -> str:
+    return "Resource content"
+```
+
+Define a server resource.
+
+#### prompt()
+
+```python
+@server.prompt(
+    name: str,
+    title: str | None = None,
+    description: str | None = None
+)
+def my_prompt(param: str) -> str:
+    return f"Prompt: {param}"
+```
+
+Define a server prompt.
+
+#### run()
+
+```python
+server.run(
+    transport: TransportType = "streamable-http",
+    host: str | None = None,
+    port: int | None = None,
+    reload: bool = False,
+    debug: bool = False
+)
+```
+
+Run the server.
+
+<ParamField path="transport" type="'stdio' | 'streamable-http' | 'sse'" default="'streamable-http'">
+  Transport protocol to use
+</ParamField>
+
+<ParamField path="host" type="str">
+  Host override
+</ParamField>
+
+<ParamField path="port" type="int">
+  Port override
+</ParamField>
+
+<ParamField path="reload" type="bool" default="False">
+  Enable auto-reload
+</ParamField>
+
+#### include_router()
+
+```python
+server.include_router(
+    router: MCPRouter,
+    prefix: str = "",
+    enabled: bool = True
+)
+```
+
+Include a router's tools, resources, and prompts.
+
+## Context
+
+Access request context in tools:
+
+```python
+from mcp.server.fastmcp import Context
+
+@server.tool()
+async def my_tool(context: Context) -> dict:
+    session = context.request_context.session
+    return {"session_id": session.session_id}
+```
+
+## MCPRouter
+
+Organize server code with routers:
+
+```python
+from mcp_use.server import MCPRouter
+
+router = MCPRouter()
+
+@router.tool()
+def router_tool(param: str) -> str:
+    return f"Result: {param}"
+
+server.include_router(router, prefix="prefix")
+```

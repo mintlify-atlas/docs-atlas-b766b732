@@ -1,0 +1,548 @@
+---
+title: "Response Helpers API Reference"
+description: "Helper functions for creating tool and resource responses"
+icon: "wand-magic-sparkles"
+---
+
+## Overview
+
+Response helpers provide convenient functions for creating properly formatted responses from MCP tools and resources. All helpers return `CallToolResult` or `TypedCallToolResult` objects.
+
+## Text Responses
+
+### text()
+
+Create a plain text response.
+
+```typescript
+import { text } from 'mcp-use/server';
+
+server.tool({
+  name: 'greet',
+  schema: z.object({ name: z.string() })
+}, async ({ name }) => {
+  return text(`Hello, ${name}!`);
+});
+```
+
+<ParamField path="content" type="string" required>
+  Text content to return
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Formatted response with MIME type `text/plain`
+</ResponseField>
+
+### markdown()
+
+Create a Markdown response.
+
+```typescript
+import { markdown } from 'mcp-use/server';
+
+server.resource({
+  uri: 'doc://readme',
+  name: 'README'
+}, async () => {
+  return markdown('# Welcome\n\nGetting started...');
+});
+```
+
+<ParamField path="content" type="string" required>
+  Markdown content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with MIME type `text/markdown`
+</ResponseField>
+
+### html()
+
+Create an HTML response.
+
+```typescript
+import { html } from 'mcp-use/server';
+
+server.resource({
+  uri: 'ui://dashboard',
+  name: 'Dashboard'
+}, async () => {
+  return html('<h1>Dashboard</h1><p>Welcome</p>');
+});
+```
+
+<ParamField path="content" type="string" required>
+  HTML content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with MIME type `text/html`
+</ResponseField>
+
+### xml()
+
+Create an XML response.
+
+```typescript
+import { xml } from 'mcp-use/server';
+
+server.resource({
+  uri: 'data://sitemap',
+  name: 'Sitemap'
+}, async () => {
+  return xml('<?xml version="1.0"?><root>...</root>');
+});
+```
+
+<ParamField path="content" type="string" required>
+  XML content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with MIME type `text/xml`
+</ResponseField>
+
+### css()
+
+Create a CSS response.
+
+```typescript
+import { css } from 'mcp-use/server';
+
+server.resource({
+  uri: 'asset://theme.css',
+  name: 'Theme'
+}, async () => {
+  return css('body { margin: 0; background: #fff; }');
+});
+```
+
+<ParamField path="content" type="string" required>
+  CSS content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with MIME type `text/css`
+</ResponseField>
+
+### javascript()
+
+Create a JavaScript response.
+
+```typescript
+import { javascript } from 'mcp-use/server';
+
+server.resource({
+  uri: 'asset://main.js',
+  name: 'Main Script'
+}, async () => {
+  return javascript('console.log("Hello");');
+});
+```
+
+<ParamField path="content" type="string" required>
+  JavaScript content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with MIME type `text/javascript`
+</ResponseField>
+
+## Structured Data
+
+### object()
+
+Create a JSON object response with type-safe structured content.
+
+```typescript
+import { object } from 'mcp-use/server';
+
+server.tool({
+  name: 'get-user',
+  schema: z.object({ id: z.string() })
+}, async ({ id }) => {
+  const user = await getUser(id);
+  return object({
+    id: user.id,
+    name: user.name,
+    email: user.email
+  });
+});
+```
+
+<ParamField path="data" type="Record<string, any>" required>
+  Object to return as JSON
+</ParamField>
+
+<ResponseField name="return" type="TypedCallToolResult<T>">
+  Response with MIME type `application/json` and typed `structuredContent`
+</ResponseField>
+
+**Typed Usage:**
+
+```typescript
+const result = await session.callTool('get-user', { id: '123' });
+if (result.structuredContent) {
+  // TypeScript knows the shape of structuredContent
+  console.log(result.structuredContent.email);
+}
+```
+
+### array()
+
+Create an array response.
+
+```typescript
+import { array } from 'mcp-use/server';
+
+server.tool({
+  name: 'list-users'
+}, async () => {
+  const users = await getUsers();
+  return array(users);
+});
+```
+
+<ParamField path="data" type="any[]" required>
+  Array to return
+</ParamField>
+
+<ResponseField name="return" type="TypedCallToolResult<{ data: T }>">
+  Response with array wrapped in `{ data: [...] }`
+</ResponseField>
+
+## Media
+
+### image()
+
+Create an image response.
+
+```typescript
+import { image } from 'mcp-use/server';
+
+server.tool({
+  name: 'generate-qr'
+}, async () => {
+  const dataUrl = generateQRCode('https://example.com');
+  return image(dataUrl, 'image/png');
+});
+```
+
+<ParamField path="data" type="string" required>
+  Image data (data URL or base64)
+</ParamField>
+
+<ParamField path="mimeType" type="string" default="'image/png'">
+  Image MIME type (e.g., 'image/png', 'image/jpeg')
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with image content
+</ResponseField>
+
+### audio()
+
+Create an audio response.
+
+```typescript
+import { audio } from 'mcp-use/server';
+
+// With base64 data
+server.tool({
+  name: 'text-to-speech'
+}, async ({ text }) => {
+  const audioData = await synthesizeSpeech(text);
+  return audio(audioData, 'audio/wav');
+});
+
+// With file path (async)
+server.resource({
+  uri: 'audio://notification',
+  name: 'Notification Sound'
+}, async () => {
+  return await audio('./sounds/notification.wav');
+});
+```
+
+<ParamField path="dataOrPath" type="string" required>
+  Audio data (base64) or file path
+</ParamField>
+
+<ParamField path="mimeType" type="string">
+  Audio MIME type (e.g., 'audio/wav', 'audio/mp3'). Auto-detected from file extension if path provided
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult | Promise<CallToolResult>">
+  Response with audio content (Promise if file path provided)
+</ResponseField>
+
+### binary()
+
+Create a binary response.
+
+```typescript
+import { binary } from 'mcp-use/server';
+
+server.resource({
+  uri: 'file://document.pdf',
+  name: 'Document'
+}, async () => {
+  const pdfData = await readPDFAsBase64();
+  return binary(pdfData, 'application/pdf');
+});
+```
+
+<ParamField path="base64Data" type="string" required>
+  Base64-encoded binary data
+</ParamField>
+
+<ParamField path="mimeType" type="string" required>
+  MIME type of the binary content
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Response with binary content
+</ResponseField>
+
+## Special Responses
+
+### resource()
+
+Create a resource reference response.
+
+```typescript
+import { resource, text } from 'mcp-use/server';
+
+// Three-argument form: uri, mimeType, text
+server.tool({
+  name: 'get-config'
+}, async () => {
+  return resource('config://settings', 'text/plain', 'theme=dark');
+});
+
+// Two-argument form: uri, CallToolResult
+server.tool({
+  name: 'get-data'
+}, async () => {
+  return resource('data://metrics', object({ views: 1000 }));
+});
+```
+
+<ParamField path="uri" type="string" required>
+  Resource URI
+</ParamField>
+
+<ParamField path="mimeTypeOrContent" type="string | CallToolResult" required>
+  MIME type (3-arg form) or CallToolResult (2-arg form)
+</ParamField>
+
+<ParamField path="text" type="string">
+  Text content (3-arg form only)
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Resource reference response
+</ResponseField>
+
+### widget()
+
+Create a widget response with runtime data.
+
+```typescript
+import { widget, text } from 'mcp-use/server';
+
+server.tool({
+  name: 'get-weather',
+  schema: z.object({ city: z.string() }),
+  widget: {
+    name: 'weather-display',
+    invoking: 'Fetching weather...',
+    invoked: 'Weather loaded'
+  }
+}, async ({ city }) => {
+  const data = await fetchWeather(city);
+  return widget({
+    // Widget-only data (hidden from model)
+    props: {
+      temperature: data.temp,
+      conditions: data.conditions,
+      icon: data.icon
+    },
+    // Model sees this summary
+    output: text(`Weather in ${city}: ${data.temp}°C, ${data.conditions}`)
+  });
+});
+```
+
+<ParamField path="config" type="WidgetResponseConfig" required>
+  Widget runtime configuration
+</ParamField>
+
+<ParamField path="config.props" type="Record<string, any>">
+  Widget-only data passed to `useWidget().props` (hidden from model)
+</ParamField>
+
+<ParamField path="config.data" type="Record<string, any>">
+  Legacy alias for `props`
+</ParamField>
+
+<ParamField path="config.output" type="CallToolResult">
+  Response helper result that the model sees (text, object, etc.)
+</ParamField>
+
+<ParamField path="config.message" type="string">
+  Optional override for the text message
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Widget response with metadata
+</ResponseField>
+
+**Widget Configuration:**
+
+```typescript
+interface WidgetResponseConfig {
+  props?: Record<string, any>;    // Widget-only data
+  data?: Record<string, any>;     // Legacy alias for props
+  output?: CallToolResult;         // Model sees this
+  message?: string;                // Override text message
+}
+```
+
+### error()
+
+Create an error response.
+
+```typescript
+import { error } from 'mcp-use/server';
+
+server.tool({
+  name: 'risky-operation'
+}, async () => {
+  if (somethingWrong) {
+    return error('Operation failed: invalid input');
+  }
+  return text('Success!');
+});
+```
+
+<ParamField path="message" type="string" required>
+  Error message
+</ParamField>
+
+<ResponseField name="return" type="TypedCallToolResult<never>">
+  Error response with `isError: true`
+</ResponseField>
+
+### mix()
+
+Combine multiple responses into one.
+
+```typescript
+import { mix, text, object } from 'mcp-use/server';
+
+server.tool({
+  name: 'analyze'
+}, async () => {
+  return mix(
+    text('Analysis complete'),
+    object({ score: 95, insights: ['Good', 'Excellent'] })
+  );
+});
+```
+
+<ParamField path="...results" type="CallToolResult[]" required>
+  Multiple CallToolResult objects to combine
+</ParamField>
+
+<ResponseField name="return" type="CallToolResult">
+  Combined response with merged content, structuredContent, and metadata
+</ResponseField>
+
+## Type Definitions
+
+### CallToolResult
+
+Base response type:
+
+```typescript
+interface CallToolResult {
+  content: Array<TextContent | ImageContent | ResourceContent>;
+  isError?: boolean;
+  _meta?: Record<string, unknown>;
+  structuredContent?: Record<string, unknown>;
+}
+```
+
+### TypedCallToolResult
+
+Typed response with structured content:
+
+```typescript
+interface TypedCallToolResult<T extends Record<string, unknown>> {
+  content: CallToolResult['content'];
+  isError?: boolean;
+  _meta?: Record<string, unknown>;
+  structuredContent?: T;
+}
+```
+
+## Examples
+
+### Combining Response Types
+
+```typescript
+server.tool({
+  name: 'process-data',
+  schema: z.object({ format: z.enum(['json', 'csv', 'markdown']) })
+}, async ({ format }) => {
+  const data = await processData();
+  
+  if (format === 'json') {
+    return object(data);
+  } else if (format === 'csv') {
+    return text(convertToCSV(data));
+  } else {
+    return markdown(convertToMarkdown(data));
+  }
+});
+```
+
+### Rich Widget Response
+
+```typescript
+server.tool({
+  name: 'stock-quote',
+  schema: z.object({ symbol: z.string() }),
+  widget: {
+    name: 'stock-chart',
+    invoking: 'Loading stock data...',
+    invoked: 'Stock data loaded'
+  }
+}, async ({ symbol }) => {
+  const quote = await getStockQuote(symbol);
+  const history = await getStockHistory(symbol);
+  
+  return widget({
+    props: {
+      symbol,
+      currentPrice: quote.price,
+      change: quote.change,
+      changePercent: quote.changePercent,
+      chartData: history
+    },
+    output: object({
+      symbol,
+      price: quote.price,
+      change: quote.change,
+      summary: `${symbol} is trading at $${quote.price} (${quote.change > 0 ? '+' : ''}${quote.changePercent}%)`
+    })
+  });
+});
+```
+
+## See Also
+
+- [MCPServer API](/typescript/api/server) - Server class and tool registration
+- [Widget API](/typescript/api/react-hooks) - React hooks for building widgets
+- [Tools Guide](/typescript/server/tools) - Complete guide to building tools

@@ -1,0 +1,216 @@
+---
+title: "Quickstart"
+description: "Create your first MCP agent in minutes"
+icon: "rocket"
+---
+
+## Your First MCP Agent
+
+Create a functional MCP agent in just 6 lines of code:
+
+```python
+import asyncio
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+load_dotenv()
+
+config = {
+    "mcpServers": {
+        "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"],
+            "env": {"DISPLAY": ":1"}
+        }
+    }
+}
+
+async def main():
+    client = MCPClient(config=config)
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client, max_steps=30)
+    
+    result = await agent.run(
+        "Find the best restaurant in San Francisco"
+    )
+    print(f"Result: {result}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Using Configuration Files
+
+For better organization, use a JSON configuration file:
+
+```json browser_mcp.json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {
+        "DISPLAY": ":1"
+      }
+    }
+  }
+}
+```
+
+Load the configuration:
+
+```python
+from mcp_use import MCPAgent, MCPClient
+from langchain_openai import ChatOpenAI
+import asyncio
+
+async def main():
+    client = MCPClient.from_config_file("browser_mcp.json")
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client)
+    
+    result = await agent.run("Navigate to github.com and search for mcp-use")
+    print(result)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Streaming Responses
+
+Stream agent execution for real-time feedback:
+
+```python
+async def main():
+    client = MCPClient.from_config_file("browser_mcp.json")
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client, max_steps=30)
+    
+    async for step in agent.stream("Find jobs at nvidia for ML engineers"):
+        if isinstance(step, str):
+            print(f"Final Result: {step}")
+        else:
+            action, observation = step
+            print(f"Tool: {action.tool}")
+            print(f"Input: {action.tool_input}")
+            print(f"Output: {observation}")
+
+asyncio.run(main())
+```
+
+## Multiple LLM Providers
+
+mcp-use supports any LangChain-compatible LLM:
+
+<CodeGroup>
+
+```python OpenAI
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Anthropic
+from langchain_anthropic import ChatAnthropic
+
+llm = ChatAnthropic(model="claude-sonnet-4-5")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Google
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+llm = ChatGoogleGenerativeAI(model="gemini-pro")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Groq
+from langchain_groq import ChatGroq
+
+llm = ChatGroq(model="llama3-8b-8192")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+</CodeGroup>
+
+## Common MCP Servers
+
+Here are some popular MCP servers you can use:
+
+### Playwright (Web Browsing)
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
+```
+
+### Filesystem Operations
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"]
+    }
+  }
+}
+```
+
+### Airbnb Search
+
+```json
+{
+  "mcpServers": {
+    "airbnb": {
+      "command": "npx",
+      "args": ["-y", "@openbnb/mcp-server-airbnb"]
+    }
+  }
+}
+```
+
+## Error Handling
+
+Always use try-finally to clean up resources:
+
+```python
+async def main():
+    client = MCPClient.from_config_file("config.json")
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client)
+    
+    try:
+        result = await agent.run("Your query here")
+        print(result)
+    finally:
+        # Clean up all sessions
+        await client.close_all_sessions()
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="MCP Agent" icon="robot" href="/python/agent/overview">
+    Learn about building agents
+  </Card>
+  <Card title="MCP Client" icon="plug" href="/python/client/overview">
+    Direct tool access without agents
+  </Card>
+  <Card title="MCP Server" icon="server" href="/python/server/overview">
+    Create your own MCP servers
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/mcp-use/mcp-use/tree/main/libraries/python/examples">
+    Browse example implementations
+  </Card>
+</CardGroup>

@@ -1,0 +1,626 @@
+---
+title: 'CLI Commands'
+description: 'Complete reference for all mcp-use CLI commands and options'
+icon: 'terminal'
+---
+
+# CLI Commands Reference
+
+Complete reference for all `mcp-use` CLI commands with examples and options.
+
+## `dev` - Development Server
+
+Start a development server with hot reload, TypeScript watch mode, and auto-opening inspector.
+
+### Usage
+
+```bash
+mcp-use dev [options]
+```
+
+### Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|----------|
+| `--path <path>` | `-p` | Project directory | Current directory |
+| `--port <port>` | | Server port | `3000` |
+| `--no-open` | | Don't auto-open inspector | Opens by default |
+| `--no-hmr` | | Disable hot module reload | HMR enabled |
+| `--help` | `-h` | Show help | |
+
+### Examples
+
+<CodeGroup>
+
+```bash Basic
+mcp-use dev
+
+# Output:
+# Building 2 widget(s)...
+# ✅ weather built in 245ms
+# ✅ dashboard built in 312ms
+# Server running on port 3000
+# 🌐 Opening inspector at http://localhost:3000/inspector
+```
+
+```bash Custom Port
+mcp-use dev --port 8080
+
+# Or with environment variable:
+PORT=8080 mcp-use dev
+```
+
+```bash Custom Project Path
+mcp-use dev --path ./my-app
+
+# Works from any directory
+cd ~/projects
+mcp-use dev -p ./mcp-server
+```
+
+```bash No Auto-Open
+mcp-use dev --no-open
+
+# Inspector won't open automatically
+# Manually visit: http://localhost:3000/inspector
+```
+
+```bash Disable HMR
+mcp-use dev --no-hmr
+
+# Uses tsx watch mode instead
+# Server restarts on every change
+# WebSocket connections are lost
+```
+
+</CodeGroup>
+
+### What Happens in Dev Mode
+
+<Steps>
+  <Step title="TypeScript Compilation">
+    Runs `tsc --watch` to compile TypeScript in real-time:
+    ```bash
+    Watching for file changes...
+    ```
+  </Step>
+
+  <Step title="Widget Building">
+    Scans `resources/` for `.tsx` files and builds them:
+    ```bash
+    Building 3 widget(s) (inline mode for VS Code compatibility)...
+    ✅ weather built in 234ms
+    ✅ kanban-board built in 456ms
+    ✅ settings built in 189ms
+    ```
+  </Step>
+
+  <Step title="Server Start">
+    Starts your MCP server with HMR enabled:
+    ```bash
+    Server running on port 3000
+    MCP endpoint: http://localhost:3000/mcp
+    ```
+  </Step>
+
+  <Step title="Inspector Launch">
+    Automatically opens the inspector in your browser:
+    ```bash
+    🌐 Opening inspector at http://localhost:3000/inspector
+    ```
+  </Step>
+
+  <Step title="File Watching">
+    Watches for changes:
+    - `src/**/*.ts` → Server hot-reloads (HMR mode) or restarts
+    - `resources/**/*.tsx` → Widgets rebuild
+    - `public/**/*` → Assets copied
+  </Step>
+</Steps>
+
+### HMR vs Non-HMR Mode
+
+<Tabs>
+  <Tab title="HMR Mode (Default)">
+    **Advantages:**
+    - Preserves WebSocket connections
+    - Faster updates (no full restart)
+    - Better developer experience
+    - State preserved during reload
+
+    **How it works:**
+    ```typescript
+    // Server dynamically reloads registrations
+    server.syncRegistrationsFrom(freshlyImportedModule);
+    ```
+
+    **Best for:**
+    - Active development
+    - Testing with clients
+    - Rapid iteration
+  </Tab>
+
+  <Tab title="Non-HMR Mode">
+    **Advantages:**
+    - Simpler process model
+    - Full process restart (clean slate)
+    - Better for debugging startup issues
+
+    **How it works:**
+    ```bash
+    tsx watch src/index.ts
+    # Restarts entire process on change
+    ```
+
+    **Best for:**
+    - Troubleshooting
+    - Initial setup
+    - Simple servers
+
+    **Enable:**
+    ```bash
+    mcp-use dev --no-hmr
+    ```
+  </Tab>
+</Tabs>
+
+## `build` - Production Build
+
+Build your MCP application for production deployment.
+
+### Usage
+
+```bash
+mcp-use build [options]
+```
+
+### Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|----------|
+| `--path <path>` | `-p` | Project directory | Current directory |
+| `--help` | `-h` | Show help | |
+
+### Examples
+
+<CodeGroup>
+
+```bash Standard Build
+mcp-use build
+
+# Output:
+# Building widgets...
+# ✅ weather built in 1.2s
+# ✅ dashboard built in 1.5s
+# Compiling TypeScript...
+# ✅ TypeScript compiled successfully
+# Copying public assets...
+# ✅ Build complete in 3.2s
+```
+
+```bash Custom Project
+mcp-use build --path ./my-app
+
+# Builds from specified directory
+```
+
+```bash With Environment Variables
+MCP_URL=https://myserver.com mcp-use build
+
+# Widgets will use this base URL
+# Important for static deployments
+```
+
+</CodeGroup>
+
+### Build Process
+
+<Steps>
+  <Step title="Widget Building">
+    Compiles all React widgets in `resources/`:
+    - Bundles React, dependencies, and your code
+    - Generates hashed asset filenames
+    - Extracts widget metadata
+    - Creates standalone HTML files
+
+    **Output structure:**
+    ```
+    dist/resources/mcp-use/widgets/
+    ├── weather/
+    │   ├── index.html
+    │   └── assets/
+    │       ├── index-a1b2c3d4.js
+    │       └── index-e5f6g7h8.css
+    ```
+  </Step>
+
+  <Step title="TypeScript Compilation">
+    Compiles TypeScript to JavaScript:
+    ```bash
+    tsc -p tsconfig.json
+    ```
+
+    **Output:**
+    ```
+    dist/
+    ├── index.js
+    ├── index.d.ts
+    └── server/
+        ├── tools.js
+        └── tools.d.ts
+    ```
+  </Step>
+
+  <Step title="Asset Copying">
+    Copies `public/` folder contents:
+    ```
+    public/favicon.ico → dist/public/favicon.ico
+    public/icon.svg → dist/public/icon.svg
+    ```
+  </Step>
+
+  <Step title="Manifest Generation">
+    Creates `dist/mcp-use.json` with metadata:
+    ```json
+    {
+      "version": "1.0.0",
+      "buildTime": "2026-02-19T10:30:00.000Z",
+      "widgets": {
+        "weather": {
+          "title": "Weather Display",
+          "description": "Show weather information",
+          "props": { /* JSON Schema */ }
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Build Optimizations
+
+<CardGroup cols={2}>
+  <Card title="Minification" icon="compress">
+    JavaScript and CSS are minified with esbuild
+  </Card>
+  <Card title="Hashed Assets" icon="hashtag">
+    Filenames include content hash for cache busting
+  </Card>
+  <Card title="Tree Shaking" icon="tree">
+    Unused code is removed from bundles
+  </Card>
+  <Card title="Code Splitting" icon="split">
+    Shared dependencies extracted to separate chunks
+  </Card>
+</CardGroup>
+
+## `start` - Production Server
+
+Start the production server from built files.
+
+### Usage
+
+```bash
+mcp-use start [options]
+```
+
+### Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|----------|
+| `--path <path>` | `-p` | Project directory | Current directory |
+| `--port <port>` | | Server port | `3000` |
+| `--tunnel` | | Expose via public tunnel | Disabled |
+| `--help` | `-h` | Show help | |
+
+### Examples
+
+<CodeGroup>
+
+```bash Basic Start
+mcp-use start
+
+# Output:
+# Server running on port 3000
+# MCP endpoint: http://localhost:3000/mcp
+# Inspector: http://localhost:3000/inspector
+```
+
+```bash Custom Port
+mcp-use start --port 8080
+
+PORT=8080 mcp-use start
+```
+
+```bash With Tunnel
+mcp-use start --tunnel
+
+# Output:
+# Server running on port 3000
+# 🔗 Public URL: https://happy-cat.run.mcp-use.com/mcp
+# MCP endpoint: http://localhost:3000/mcp
+```
+
+```bash PM2 Deployment
+pm2 start "mcp-use start" --name my-mcp-server
+pm2 save
+
+# Server runs in background with auto-restart
+```
+
+</CodeGroup>
+
+### Tunnel Mode
+
+The `--tunnel` flag exposes your local server via a public URL:
+
+<Steps>
+  <Step title="Enable Tunnel">
+    ```bash
+    mcp-use start --tunnel
+    ```
+  </Step>
+
+  <Step title="Get Public URL">
+    A random subdomain is assigned:
+    ```
+    🔗 Public URL: https://happy-cat.run.mcp-use.com/mcp
+    ```
+  </Step>
+
+  <Step title="Share with Others">
+    Anyone can connect to your MCP server:
+    ```bash
+    # From inspector or client
+    https://happy-cat.run.mcp-use.com/mcp
+    ```
+  </Step>
+
+  <Step title="Persistent Subdomain">
+    Subdomain is saved to `dist/mcp-use.json`:
+    ```json
+    {
+      "tunnel": {
+        "subdomain": "happy-cat"
+      }
+    }
+    ```
+    
+    Reused on next tunnel start.
+  </Step>
+</Steps>
+
+<Warning>
+  Tunnel mode exposes your server publicly. Don't use with sensitive data.
+</Warning>
+
+## `deploy` - Cloud Deployment
+
+Deploy your MCP server to mcp-use cloud.
+
+### Usage
+
+```bash
+mcp-use deploy [options]
+```
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|----------|
+| `--name <name>` | Deployment name | Git repo name |
+| `--port <port>` | Server port | `3000` |
+| `--runtime <runtime>` | Runtime: "node" or "python" | Detected |
+| `--open` | Open deployment in browser | No |
+| `--env <KEY=VALUE>` | Environment variable (repeatable) | |
+| `--env-file <path>` | Load env vars from file | |
+| `--help` | Show help | |
+
+### Examples
+
+<CodeGroup>
+
+```bash Basic Deploy
+mcp-use deploy
+
+# Output:
+# 🔍 Checking GitHub repository...
+# ✅ Repository: user/mcp-server
+# 📦 Uploading code...
+# 🔨 Building...
+# ✅ Deployed successfully!
+# 🔗 https://mcp-server.run.mcp-use.com/mcp
+```
+
+```bash Named Deployment
+mcp-use deploy --name my-weather-server
+
+# Custom deployment name
+# URL: https://my-weather-server.run.mcp-use.com/mcp
+```
+
+```bash With Environment Variables
+mcp-use deploy --env API_KEY=abc123 --env DEBUG=true
+
+# Or from file:
+mcp-use deploy --env-file .env.production
+```
+
+```bash Auto-Open
+mcp-use deploy --open
+
+# Opens deployment URL in browser after success
+```
+
+```bash Python Runtime
+mcp-use deploy --runtime python
+
+# For Python MCP servers
+```
+
+</CodeGroup>
+
+### Deployment Process
+
+<Steps>
+  <Step title="GitHub Integration">
+    CLI checks for GitHub repository and GitHub App access.
+
+    **Requirements:**
+    - Git repository with GitHub remote
+    - mcp-use GitHub App installed
+    - Repository access granted
+
+    **Setup:**
+    ```bash
+    # If not installed, CLI prompts:
+    # ⚠️  GitHub App not installed
+    # 🔗 Install at: https://github.com/apps/mcp-use
+    ```
+  </Step>
+
+  <Step title="Pre-flight Checks">
+    Validates deployment requirements:
+    - ✅ Git repository exists
+    - ✅ Remote URL is GitHub
+    - ✅ GitHub App has repo access
+    - ✅ No uncommitted changes (optional)
+  </Step>
+
+  <Step title="Project Linking">
+    Creates or updates `.mcp-use/project.json`:
+    ```json
+    {
+      "projectId": "proj_abc123",
+      "deploymentId": "dep_xyz789"
+    }
+    ```
+
+    Enables redeployments with same URL.
+  </Step>
+
+  <Step title="Code Upload">
+    Uploads your code to cloud:
+    ```
+    📦 Creating tarball...
+    📦 Uploading (2.3 MB)...
+    ✅ Upload complete
+    ```
+  </Step>
+
+  <Step title="Cloud Build">
+    Builds and deploys:
+    ```
+    🔨 Installing dependencies...
+    🔨 Building widgets...
+    🔨 Starting server...
+    ✅ Deployment successful!
+    ```
+  </Step>
+
+  <Step title="URL Assignment">
+    Your server gets a public URL:
+    ```
+    🔗 https://your-server.run.mcp-use.com/mcp
+    ```
+  </Step>
+</Steps>
+
+### Managing Deployments
+
+```bash
+# View deployments
+mcp-use deployments list
+
+# Get deployment info
+mcp-use deployments info <id>
+
+# View logs
+mcp-use deployments logs <id>
+
+# Delete deployment
+mcp-use deployments delete <id>
+```
+
+## Authentication Commands
+
+Manage mcp-use cloud authentication.
+
+### `login` - Sign In
+
+Authenticate with mcp-use cloud:
+
+```bash
+mcp-use login
+
+# Output:
+# Opening browser for authentication...
+# Enter code: ABCD-EFGH
+# ✅ Logged in as user@example.com
+```
+
+### `whoami` - Check User
+
+Check current authentication:
+
+```bash
+mcp-use whoami
+
+# Output:
+# ✅ Logged in as user@example.com
+# Organization: my-org
+```
+
+### `logout` - Sign Out
+
+Sign out from mcp-use cloud:
+
+```bash
+mcp-use logout
+
+# Output:
+# ✅ Logged out successfully
+```
+
+## Environment Variables
+
+Global environment variables for all commands:
+
+### Development & Build
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `PORT` | Server port | `3000` |
+| `NODE_ENV` | Environment mode | `development` |
+| `MCP_URL` | Base URL for widgets | `http://localhost:3000` |
+
+### Cloud Deployment
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `MCP_API_URL` | Backend API URL | `https://cloud.mcp-use.com/api/v1` |
+| `MCP_WEB_URL` | Frontend URL | `https://mcp-use.com` |
+
+### Examples
+
+```bash
+# Custom base URL for widgets
+MCP_URL=https://myserver.com mcp-use build
+
+# Local cloud development
+export MCP_WEB_URL=http://localhost:3000
+export MCP_API_URL=http://localhost:8000
+mcp-use login
+mcp-use deploy
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Hot Reload" icon="fire" href="/tools/cli/hot-reload">
+    Learn how HMR works and troubleshooting
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/tools/cli/deployment">
+    Deploy to production with cloud or Docker
+  </Card>
+</CardGroup>

@@ -1,0 +1,507 @@
+---
+title: 'Conversation Memory'
+description: 'Managing conversation history and context'
+icon: 'brain'
+---
+
+# Conversation Memory
+
+MCPAgent includes built-in conversation memory that maintains context across multiple interactions, enabling natural multi-turn conversations.
+
+## How It Works
+
+When memory is enabled (default), the agent automatically:
+1. Stores all user messages
+2. Stores all assistant responses
+3. Stores tool calls and their results
+4. Includes conversation history in subsequent queries
+
+This allows the agent to:
+- Remember previous interactions
+- Maintain context across queries
+- Build on previous responses
+- Reference earlier tool results
+
+## Basic Memory Usage
+
+Memory is enabled by default:
+
+```typescript
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    }
+  },
+  memoryEnabled: true  // Default
+});
+
+// First query
+await agent.run('My name is Alice');
+// Response: "Nice to meet you, Alice!"
+
+// Second query - agent remembers
+await agent.run('What is my name?');
+// Response: "Your name is Alice"
+
+// Third query - agent maintains context
+await agent.run('List the files in the current directory');
+// Agent can still reference that you're Alice if relevant
+```
+
+## Memory Operations
+
+### View History
+
+Get the full conversation history:
+
+```typescript
+const history = agent.getConversationHistory();
+
+console.log(`Conversation has ${history.length} messages`);
+
+history.forEach((message, i) => {
+  console.log(`${i + 1}. ${message.constructor.name}`);
+  console.log(`   Content: ${message.content}`);
+});
+```
+
+Output:
+```
+Conversation has 7 messages
+1. SystemMessage
+   Content: You are a helpful assistant...
+2. HumanMessage
+   Content: My name is Alice
+3. AIMessage
+   Content: Nice to meet you, Alice!
+4. HumanMessage
+   Content: What is my name?
+5. AIMessage
+   Content: Your name is Alice
+...
+```
+
+### Clear History
+
+Reset the conversation:
+
+```typescript
+// Clear everything except system message
+agent.clearConversationHistory();
+
+// Now the agent won't remember previous context
+await agent.run('What is my name?');
+// Response: "I don't have information about your name"
+```
+
+### Disable Memory
+
+Create an agent without conversation memory:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  memoryEnabled: false
+});
+
+// Each query is independent
+await agent.run('My name is Alice');
+await agent.run('What is my name?');
+// Response: "I don't know your name"
+```
+
+## External History
+
+Provide your own conversation history:
+
+```typescript
+import { HumanMessage, AIMessage } from 'langchain';
+
+const externalHistory = [
+  new HumanMessage('I need help with my project'),
+  new AIMessage('I\'d be happy to help! What do you need?'),
+  new HumanMessage('I want to analyze the file structure')
+];
+
+const result = await agent.run({
+  prompt: 'List all TypeScript files',
+  externalHistory
+});
+
+// The agent sees the full context including external history
+```
+
+This is useful for:
+- Integrating with external chat systems
+- Loading conversation from database
+- Sharing context between agent instances
+
+## Interactive Chat Example
+
+Build a chat interface with memory:
+
+```typescript examples/agent/basic/chat_with_memory.ts
+import readline from 'node:readline';
+import { MCPAgent } from 'mcp-use/agent';
+
+async function runChat() {
+  const agent = new MCPAgent({
+    llm: 'openai/gpt-4o',
+    mcpServers: {
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+      }
+    },
+    systemPrompt: 'You are a helpful assistant with file system access.',
+    memoryEnabled: true
+  });
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  console.log('Chat started. Type "exit" to quit, "clear" to reset history.\n');
+
+  const question = (prompt: string): Promise<string> => {
+    return new Promise(resolve => rl.question(prompt, resolve));
+  };
+
+  try {
+    while (true) {
+      const input = await question('You: ');
+
+      if (input.toLowerCase() === 'exit') {
+        break;
+      }
+
+      if (input.toLowerCase() === 'clear') {
+        agent.clearConversationHistory();
+        console.log('History cleared.\n');
+        continue;
+      }
+
+      const response = await agent.run(input);
+      console.log(`\nAssistant: ${response}\n`);
+    }
+  } finally {
+    rl.close();
+    await agent.close();
+  }
+}
+
+runChat();
+```
+
+Example conversation:
+```
+You: Create a file called notes.txt with my to-do list
+Assistant: I've created notes.txt. What items should I add to your to-do list?
+
+You: Add "Review PR" and "Update docs"
+Assistant: I've added those items to notes.txt.
+
+You: What did I just ask you to add?
+Assistant: You asked me to add "Review PR" and "Update docs" to the file.
+```
+
+## Memory Management Patterns
+
+### Session-Based Memory
+
+Store conversation history per session:
+
+```typescript
+class AgentSession {
+  private agent: MCPAgent;
+  private sessionId: string;
+  
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+    this.agent = new MCPAgent({
+      llm: 'openai/gpt-4o',
+      mcpServers: {...},
+      memoryEnabled: true
+    });
+  }
+  
+  async chat(message: string): Promise<string> {
+    return await this.agent.run(message);
+  }
+  
+  getHistory() {
+    return this.agent.getConversationHistory();
+  }
+  
+  clear() {
+    this.agent.clearConversationHistory();
+  }
+  
+  async close() {
+    await this.agent.close();
+  }
+}
+
+// Use it
+const session = new AgentSession('user-123');
+await session.chat('Hello');
+await session.chat('What did I just say?');
+```
+
+### Persistent Memory
+
+Save and restore conversation history:
+
+```typescript
+import fs from 'fs/promises';
+
+async function saveHistory(agent: MCPAgent, filepath: string) {
+  const history = agent.getConversationHistory();
+  const serialized = history.map(msg => ({
+    type: msg.constructor.name,
+    content: msg.content
+  }));
+  await fs.writeFile(filepath, JSON.stringify(serialized, null, 2));
+}
+
+async function loadHistory(filepath: string) {
+  const data = await fs.readFile(filepath, 'utf-8');
+  const messages = JSON.parse(data);
+  
+  return messages.map((msg: any) => {
+    switch (msg.type) {
+      case 'HumanMessage':
+        return new HumanMessage(msg.content);
+      case 'AIMessage':
+        return new AIMessage(msg.content);
+      default:
+        throw new Error(`Unknown message type: ${msg.type}`);
+    }
+  });
+}
+
+// Save after conversation
+await saveHistory(agent, './conversation.json');
+
+// Load for next conversation
+const previousHistory = await loadHistory('./conversation.json');
+const result = await agent.run({
+  prompt: 'Continue where we left off',
+  externalHistory: previousHistory
+});
+```
+
+### Sliding Window Memory
+
+Limit memory to recent messages:
+
+```typescript
+function getRecentHistory(agent: MCPAgent, maxMessages: number = 10) {
+  const history = agent.getConversationHistory();
+  
+  // Keep system message + recent messages
+  const systemMessages = history.filter(m => m instanceof SystemMessage);
+  const otherMessages = history.filter(m => !(m instanceof SystemMessage));
+  
+  const recentMessages = otherMessages.slice(-maxMessages);
+  
+  return [...systemMessages, ...recentMessages];
+}
+
+// Use sliding window
+const recentHistory = getRecentHistory(agent, 10);
+const result = await agent.run({
+  prompt: 'New query',
+  externalHistory: recentHistory
+});
+```
+
+## Memory and Token Limits
+
+Long conversations can exceed token limits. Strategies to handle this:
+
+### 1. Regular Clearing
+
+```typescript
+let messageCount = 0;
+
+async function chat(message: string) {
+  messageCount++;
+  
+  // Clear every 20 messages
+  if (messageCount % 20 === 0) {
+    console.log('Clearing old history...');
+    agent.clearConversationHistory();
+  }
+  
+  return await agent.run(message);
+}
+```
+
+### 2. Summarization
+
+```typescript
+async function summarizeHistory(agent: MCPAgent) {
+  const history = agent.getConversationHistory();
+  
+  // Create a summary of the conversation
+  const summaryPrompt = `Summarize this conversation:\n${
+    history.map(m => `${m.constructor.name}: ${m.content}`).join('\n')
+  }`;
+  
+  const summary = await agent.run({
+    prompt: summaryPrompt,
+    externalHistory: []  // Don't include history in summary request
+  });
+  
+  // Clear history and add summary
+  agent.clearConversationHistory();
+  
+  return summary;
+}
+
+// Use it periodically
+if (agent.getConversationHistory().length > 50) {
+  const summary = await summarizeHistory(agent);
+  console.log('Conversation summarized:', summary);
+}
+```
+
+### 3. Selective Memory
+
+```typescript
+function getImportantMessages(agent: MCPAgent) {
+  const history = agent.getConversationHistory();
+  
+  // Keep system message, user queries, and final responses
+  return history.filter(msg => {
+    if (msg instanceof SystemMessage) return true;
+    if (msg instanceof HumanMessage) return true;
+    if (msg instanceof AIMessage && !msg.tool_calls) return true;
+    return false;
+  });
+}
+```
+
+## System Messages
+
+The system message is always included in memory:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  systemPrompt: 'You are a helpful coding assistant.'
+});
+
+// Get the system message
+const systemMsg = agent.getSystemMessage();
+console.log(systemMsg?.content);
+
+// Update system message
+agent.setSystemMessage('You are a security-focused code reviewer.');
+
+// The new system message applies to all future queries
+```
+
+## Memory Best Practices
+
+1. **Clear periodically** - Prevent token limit issues
+2. **Use external history for multi-agent** - Share context between agents
+3. **Disable for one-off queries** - Save tokens when context isn't needed
+4. **Save important conversations** - Persist to database or file
+5. **Monitor history length** - Track and manage growing conversations
+
+## Multi-Agent Collaboration
+
+Share context between multiple agents:
+
+```typescript
+const codeAgent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: { filesystem: {...} },
+  systemPrompt: 'You are a code analysis expert.'
+});
+
+const docAgent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: { filesystem: {...} },
+  systemPrompt: 'You are a documentation expert.'
+});
+
+// Code agent analyzes
+const codeAnalysis = await codeAgent.run('Analyze main.ts');
+
+// Get code agent's history
+const codeHistory = codeAgent.getConversationHistory();
+
+// Doc agent uses code agent's context
+const docs = await docAgent.run({
+  prompt: 'Write documentation based on the analysis',
+  externalHistory: codeHistory
+});
+```
+
+## Debugging Memory
+
+Track what the agent remembers:
+
+```typescript
+function debugMemory(agent: MCPAgent) {
+  const history = agent.getConversationHistory();
+  
+  console.log('=== Conversation Memory ===');
+  console.log(`Total messages: ${history.length}`);
+  
+  const counts = {
+    system: 0,
+    human: 0,
+    ai: 0,
+    tool: 0
+  };
+  
+  history.forEach(msg => {
+    if (msg instanceof SystemMessage) counts.system++;
+    else if (msg instanceof HumanMessage) counts.human++;
+    else if (msg instanceof AIMessage) counts.ai++;
+    else if (msg instanceof ToolMessage) counts.tool++;
+  });
+  
+  console.log('Message breakdown:', counts);
+  
+  // Estimate tokens (rough approximation)
+  const totalText = history
+    .map(m => String(m.content))
+    .join(' ');
+  const estimatedTokens = Math.ceil(totalText.length / 4);
+  
+  console.log(`Estimated tokens: ${estimatedTokens}`);
+}
+
+// Use it
+debugMemory(agent);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/typescript/agent/basic-usage">
+    Learn core agent operations
+  </Card>
+  <Card title="Streaming" icon="broadcast-tower" href="/typescript/agent/streaming">
+    Real-time agent execution
+  </Card>
+  <Card title="Server Manager" icon="server" href="/typescript/agent/server-manager">
+    Dynamic server switching
+  </Card>
+  <Card title="Agent Overview" icon="robot" href="/typescript/agent/overview">
+    Back to overview
+  </Card>
+</CardGroup>

@@ -1,0 +1,167 @@
+---
+title: "Welcome to mcp-use"
+description: "The fullstack MCP framework to build MCP Apps for ChatGPT / Claude & MCP Servers for AI Agents"
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="mcp-use Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="mcp-use Hero Dark"
+/>
+
+## About mcp-use
+
+**mcp-use** is the fullstack MCP framework to build MCP Apps for ChatGPT / Claude & MCP Servers for AI Agents.
+
+With mcp-use, you can:
+
+- **Build** with mcp-use SDK ([TypeScript](https://www.npmjs.com/package/mcp-use) | [Python](https://pypi.org/project/mcp_use/)): Create MCP Servers and MCP Apps
+- **Preview** on mcp-use MCP Inspector ([online](https://inspector.mcp-use.com/inspector) | [OSS](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/inspector)): Test and debug your MCP Servers and Apps
+- **Deploy** on [Manufact MCP Cloud](https://manufact.com): Connect your GitHub repo and have your MCP Server and App up and running in production with observability, metrics, logs, branch-deployments, and more
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get started with mcp-use in minutes with our quickstart guide
+  </Card>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install mcp-use for TypeScript or Python
+  </Card>
+  <Card
+    title="MCP Protocol"
+    icon="network-wired"
+    href="/concepts/mcp-protocol"
+  >
+    Learn about the Model Context Protocol
+  </Card>
+  <Card
+    title="Build Your First Server"
+    icon="hammer"
+    href="/guides/building-your-first-server"
+  >
+    Create your first MCP server with interactive widgets
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={3}>
+  <Card title="MCP Servers" icon="server">
+    Build powerful MCP servers with tools, resources, and prompts that AI agents can use
+  </Card>
+  <Card title="MCP Apps" icon="mobile">
+    Create interactive widgets that work across Claude, ChatGPT, and other MCP clients
+  </Card>
+  <Card title="MCP Agents" icon="robot">
+    Build AI agents that connect to MCP servers and use tools intelligently
+  </Card>
+  <Card title="Auto Inspector" icon="magnifying-glass">
+    Built-in web inspector for testing and debugging your MCP servers
+  </Card>
+  <Card title="Multi-Language" icon="code">
+    Full support for both TypeScript and Python with consistent APIs
+  </Card>
+  <Card title="Production Ready" icon="rocket">
+    Deploy with OAuth, observability, hot reload, and more
+  </Card>
+</CardGroup>
+
+## Why mcp-use?
+
+<AccordionGroup>
+  <Accordion title="Write Once, Run Everywhere">
+    Build MCP Apps with interactive widgets that work seamlessly across Claude Desktop, ChatGPT, and any MCP-compatible client. No need to maintain separate implementations.
+  </Accordion>
+  
+  <Accordion title="Developer Experience First">
+    - **Auto Inspector**: Every server includes a built-in web UI for testing
+    - **Hot Reload**: Changes reflect instantly during development
+    - **Type Safety**: Full TypeScript support with automatic type generation
+    - **Simple API**: Intuitive decorator-based API for both languages
+  </Accordion>
+  
+  <Accordion title="Production Features">
+    - **OAuth Integration**: Built-in OAuth flow handling
+    - **Observability**: Integrated Langfuse support for monitoring
+    - **Multiple Transports**: HTTP/SSE, WebSocket, and stdio support
+    - **Scalable**: Designed for production workloads
+  </Accordion>
+  
+  <Accordion title="Rich Ecosystem">
+    - Active community on [Discord](https://discord.gg/XkNkSkMz3V)
+    - Comprehensive [examples](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples)
+    - Regular updates and new features
+    - MIT licensed and open source
+  </Accordion>
+</AccordionGroup>
+
+## Package Overview
+
+### Python Package
+
+[![PyPI Version](https://img.shields.io/pypi/v/mcp_use.svg)](https://pypi.org/project/mcp_use/)
+[![PyPI Downloads](https://static.pepy.tech/badge/mcp-use)](https://pypi.org/project/mcp_use/)
+
+Complete MCP server and MCP agent SDK for Python.
+
+```bash
+pip install mcp-use
+```
+
+### TypeScript Packages
+
+| Package | Description | Version |
+|---------|-------------|----------|
+| **mcp-use** | Core framework for MCP servers, apps, and agents | [![npm](https://img.shields.io/npm/v/mcp-use.svg)](https://www.npmjs.com/package/mcp-use) |
+| **@mcp-use/cli** | Build tool with hot reload and auto-inspector | [![npm](https://img.shields.io/npm/v/@mcp-use/cli.svg)](https://www.npmjs.com/package/@mcp-use/cli) |
+| **@mcp-use/inspector** | Web-based previewer and debugger | [![npm](https://img.shields.io/npm/v/@mcp-use/inspector.svg)](https://www.npmjs.com/package/@mcp-use/inspector) |
+| **create-mcp-use-app** | Project scaffolding tool | [![npm](https://img.shields.io/npm/v/create-mcp-use-app.svg)](https://www.npmjs.com/package/create-mcp-use-app) |
+
+```bash
+npm install mcp-use
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Follow the Quickstart"
+    icon="play"
+    href="/quickstart"
+  >
+    Build your first MCP server in 5 minutes
+  </Card>
+  <Card
+    title="Understand MCP Concepts"
+    icon="book"
+    href="/concepts/mcp-protocol"
+  >
+    Learn the fundamentals of the Model Context Protocol
+  </Card>
+  <Card
+    title="Explore Examples"
+    icon="code"
+    href="https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples"
+  >
+    Check out real-world examples and templates
+  </Card>
+  <Card
+    title="Join the Community"
+    icon="discord"
+    href="https://discord.gg/XkNkSkMz3V"
+  >
+    Get help and share your creations on Discord
+  </Card>
+</CardGroup>

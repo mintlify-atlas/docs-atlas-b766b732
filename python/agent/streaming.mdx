@@ -1,0 +1,364 @@
+---
+title: "Streaming Agent Execution"
+description: "Real-time agent execution with streaming"
+icon: "stream"
+---
+
+## Streaming Overview
+
+Streaming allows you to receive real-time updates as the agent executes, including:
+
+- Tool calls and results
+- Intermediate reasoning steps
+- Final output
+
+This is ideal for building interactive UIs or monitoring long-running tasks.
+
+## Basic Streaming
+
+```python
+import asyncio
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+async def main():
+    client = MCPClient.from_config_file("config.json")
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client, max_steps=30)
+    
+    async for step in agent.stream("Find the best restaurants in Tokyo"):
+        if isinstance(step, str):
+            print(f"\n=== FINAL RESULT ===")
+            print(step)
+        else:
+            action, observation = step
+            print(f"\n=== TOOL CALL ===")
+            print(f"Tool: {action.tool}")
+            print(f"Input: {action.tool_input}")
+            print(f"Output: {observation}")
+    
+    await client.close_all_sessions()
+
+asyncio.run(main())
+```
+
+## Stream Output Format
+
+The stream yields two types of values:
+
+### 1. Intermediate Steps (tuple)
+
+```python
+(action, observation)
+```
+
+- `action`: AgentAction with tool, tool_input, and log
+- `observation`: Tool execution result
+
+### 2. Final Result (string)
+
+```python
+"Final answer from the agent"
+```
+
+## Detailed Stream Processing
+
+```python
+async for step in agent.stream(query):
+    if isinstance(step, str):
+        # Final result
+        print(f"Answer: {step}")
+    else:
+        # Tool execution
+        action, observation = step
+        
+        # Access action details
+        tool_name = action.tool
+        tool_input = action.tool_input
+        agent_log = action.log
+        
+        # Access observation
+        result = observation
+        
+        print(f"[{tool_name}] {tool_input} -> {result}")
+```
+
+## Building Interactive UIs
+
+### Console Progress
+
+```python
+import asyncio
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+console = Console()
+
+async def run_with_progress(agent, query):
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Processing...", total=None)
+        
+        async for step in agent.stream(query):
+            if isinstance(step, str):
+                progress.update(task, description="Complete!")
+                console.print(f"\n[bold green]Result:[/bold green] {step}")
+            else:
+                action, _ = step
+                progress.update(task, description=f"Using {action.tool}...")
+
+await run_with_progress(agent, "Your query")
+```
+
+### Web UI Streaming
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import json
+
+app = FastAPI()
+
+@app.get("/agent/stream")
+async def stream_agent(query: str):
+    async def generate():
+        async for step in agent.stream(query):
+            if isinstance(step, str):
+                yield f"data: {json.dumps({'type': 'result', 'content': step})}\n\n"
+            else:
+                action, observation = step
+                yield f"data: {json.dumps({
+                    'type': 'step',
+                    'tool': action.tool,
+                    'input': str(action.tool_input),
+                    'output': str(observation)
+                })}\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+## Collecting Stream Data
+
+### Save All Steps
+
+```python
+steps = []
+final_result = None
+
+async for step in agent.stream(query):
+    if isinstance(step, str):
+        final_result = step
+    else:
+        steps.append(step)
+
+print(f"Executed {len(steps)} steps")
+print(f"Final result: {final_result}")
+```
+
+### Build Execution Log
+
+```python
+execution_log = {
+    "query": query,
+    "steps": [],
+    "result": None
+}
+
+async for step in agent.stream(query):
+    if isinstance(step, str):
+        execution_log["result"] = step
+    else:
+        action, observation = step
+        execution_log["steps"].append({
+            "tool": action.tool,
+            "input": str(action.tool_input),
+            "output": str(observation)
+        })
+
+# Save log
+import json
+with open("execution.json", "w") as f:
+    json.dump(execution_log, f, indent=2)
+```
+
+## Stream with Custom Formatting
+
+```python
+import json
+
+class AgentStreamFormatter:
+    def __init__(self):
+        self.step_count = 0
+    
+    def format_step(self, action, observation):
+        self.step_count += 1
+        return f"""
+{'='*60}
+Step {self.step_count}: {action.tool}
+{'='*60}
+Input:
+{json.dumps(action.tool_input, indent=2)}
+
+Output:
+{observation[:200]}...
+"""
+    
+    def format_result(self, result):
+        return f"""
+{'='*60}
+FINAL RESULT
+{'='*60}
+{result}
+"""
+
+formatter = AgentStreamFormatter()
+
+async for step in agent.stream(query):
+    if isinstance(step, str):
+        print(formatter.format_result(step))
+    else:
+        action, observation = step
+        print(formatter.format_step(action, observation))
+```
+
+## Streaming with Timeouts
+
+```python
+import asyncio
+
+async def stream_with_timeout(agent, query, timeout=300):
+    try:
+        async with asyncio.timeout(timeout):
+            async for step in agent.stream(query):
+                if isinstance(step, str):
+                    return step
+                else:
+                    action, observation = step
+                    print(f"{action.tool}: {observation[:100]}")
+    except asyncio.TimeoutError:
+        print("Agent execution timed out")
+        return None
+
+result = await stream_with_timeout(agent, "Long running query", timeout=120)
+```
+
+## Error Handling in Streams
+
+```python
+try:
+    async for step in agent.stream(query):
+        if isinstance(step, str):
+            print(f"Success: {step}")
+        else:
+            action, observation = step
+            # Check for errors in tool output
+            if "error" in str(observation).lower():
+                print(f"Warning: Tool {action.tool} returned error")
+except Exception as e:
+    print(f"Stream error: {e}")
+finally:
+    await client.close_all_sessions()
+```
+
+## Streaming with Pretty Print
+
+Enable built-in pretty printing:
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    pretty_print=True  # Automatic formatted output
+)
+
+async for step in agent.stream(query):
+    # Agent automatically formats output
+    pass
+```
+
+## Real-Time Monitoring
+
+```python
+import time
+
+class StreamMonitor:
+    def __init__(self):
+        self.start_time = time.time()
+        self.tool_calls = {}
+    
+    async def monitor_stream(self, agent, query):
+        async for step in agent.stream(query):
+            if isinstance(step, str):
+                elapsed = time.time() - self.start_time
+                print(f"\nCompleted in {elapsed:.2f}s")
+                print(f"Tool calls: {self.tool_calls}")
+                print(f"Result: {step}")
+                return step
+            else:
+                action, _ = step
+                self.tool_calls[action.tool] = self.tool_calls.get(action.tool, 0) + 1
+                print(f"[{time.time() - self.start_time:.1f}s] {action.tool}")
+
+monitor = StreamMonitor()
+result = await monitor.monitor_stream(agent, query)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Handle Both Output Types">
+    Always check the type of streamed output:
+    ```python
+    if isinstance(step, str):
+        # Final result
+    else:
+        # Tool step
+    ```
+  </Accordion>
+
+  <Accordion title="Don't Block the Stream">
+    Avoid long-running operations in the loop:
+    ```python
+    # Bad - blocks stream
+    async for step in agent.stream(query):
+        time.sleep(5)  # Don't do this
+    
+    # Good - process async
+    async for step in agent.stream(query):
+        await async_process(step)
+    ```
+  </Accordion>
+
+  <Accordion title="Clean Up Resources">
+    Always close sessions after streaming:
+    ```python
+    try:
+        async for step in agent.stream(query):
+            process(step)
+    finally:
+        await client.close_all_sessions()
+    ```
+  </Accordion>
+
+  <Accordion title="Limit Output Size">
+    Truncate large outputs for display:
+    ```python
+    observation_preview = observation[:200] + "..."
+    print(f"Output: {observation_preview}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Memory" icon="database" href="/python/agent/memory">
+    Manage conversation history
+  </Card>
+  <Card title="Server Manager" icon="server" href="/python/agent/server-manager">
+    Dynamic server selection
+  </Card>
+</CardGroup>

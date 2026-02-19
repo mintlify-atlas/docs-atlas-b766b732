@@ -1,0 +1,951 @@
+---
+title: "Building Your First MCP Server"
+description: "Step-by-step guide to creating an MCP server with tools, resources, and prompts"
+icon: "hammer"
+---
+
+## Introduction
+
+In this guide, you'll build a complete MCP server from scratch that includes:
+
+- 🛠️ **Tools** for performing actions
+- 📋 **Resources** for accessing data
+- 📝 **Prompts** for guiding AI behavior
+- 🔍 **Inspector** for testing and debugging
+
+By the end, you'll have a fully functional weather information server.
+
+## Prerequisites
+
+<Tabs>
+  <Tab title="TypeScript">
+    - Node.js 20.19.0 or higher
+    - npm, yarn, or pnpm
+    - Basic TypeScript knowledge
+  </Tab>
+  <Tab title="Python">
+    - Python 3.11 or higher
+    - pip
+    - Basic Python knowledge
+  </Tab>
+</Tabs>
+
+## Project Setup
+
+<Tabs>
+  <Tab title="TypeScript">
+
+<Steps>
+  <Step title="Create Project Directory">
+    ```bash
+    mkdir weather-server
+    cd weather-server
+    npm init -y
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    npm install mcp-use zod
+    npm install -D typescript tsx @types/node
+    ```
+  </Step>
+  
+  <Step title="Create tsconfig.json">
+    ```json
+    {
+      "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "outDir": "./dist"
+      },
+      "include": ["src/**/*"],
+      "exclude": ["node_modules", "dist"]
+    }
+    ```
+  </Step>
+  
+  <Step title="Create src/server.ts">
+    ```bash
+    mkdir src
+    touch src/server.ts
+    ```
+  </Step>
+</Steps>
+
+  </Tab>
+  
+  <Tab title="Python">
+
+<Steps>
+  <Step title="Create Project Directory">
+    ```bash
+    mkdir weather-server
+    cd weather-server
+    ```
+  </Step>
+  
+  <Step title="Create Virtual Environment">
+    ```bash
+    python -m venv env
+    source env/bin/activate  # On Windows: env\Scripts\activate
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    pip install mcp-use
+    ```
+  </Step>
+  
+  <Step title="Create server.py">
+    ```bash
+    touch server.py
+    ```
+  </Step>
+</Steps>
+
+  </Tab>
+</Tabs>
+
+## Step 1: Basic Server Setup
+
+Let's start with a minimal server:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript src/server.ts
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  name: "weather-server",
+  version: "1.0.0",
+  description: "A server providing weather information",
+});
+
+await server.listen(3000);
+console.log("✅ Server running at http://localhost:3000");
+console.log("🔍 Inspector: http://localhost:3000/inspector");
+```
+
+Run it:
+```bash
+npx tsx src/server.ts
+```
+
+Open http://localhost:3000/inspector in your browser. You'll see the inspector with no tools yet.
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python server.py
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="weather-server",
+    version="1.0.0",
+    description="A server providing weather information",
+)
+
+if __name__ == "__main__":
+    server.run(transport="streamable-http", port=8000)
+    print("✅ Server running at http://localhost:8000")
+    print("🔍 Inspector: http://localhost:8000/inspector")
+```
+
+Run it:
+```bash
+python server.py
+```
+
+  </Tab>
+</Tabs>
+
+## Step 2: Add Your First Tool
+
+Let's add a tool to get current weather:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript src/server.ts
+import { MCPServer, text, object } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "weather-server",
+  version: "1.0.0",
+  description: "A server providing weather information",
+});
+
+// Mock weather data (replace with real API)
+const weatherData: Record<string, any> = {
+  "san francisco": { temp: 65, condition: "Partly Cloudy", humidity: 70 },
+  "new york": { temp: 45, condition: "Sunny", humidity: 55 },
+  "tokyo": { temp: 55, condition: "Rainy", humidity: 80 },
+  "london": { temp: 50, condition: "Cloudy", humidity: 75 },
+};
+
+server.tool({
+  name: "get_current_weather",
+  description: "Get current weather for a city",
+  schema: z.object({
+    city: z.string().describe("City name"),
+    units: z.enum(["celsius", "fahrenheit"]).default("fahrenheit"),
+  }),
+}, async ({ city, units }) => {
+  const cityKey = city.toLowerCase();
+  const weather = weatherData[cityKey];
+  
+  if (!weather) {
+    return text(`Weather data not available for ${city}`);
+  }
+  
+  const temp = units === "celsius" 
+    ? Math.round((weather.temp - 32) * 5/9)
+    : weather.temp;
+  
+  return object({
+    city,
+    temperature: temp,
+    units,
+    condition: weather.condition,
+    humidity: weather.humidity,
+  });
+});
+
+await server.listen(3000);
+```
+
+Now test it in the inspector:
+
+1. Open http://localhost:3000/inspector
+2. Select "get_current_weather" tool
+3. Enter `{"city": "San Francisco"}`
+4. Click "Call Tool"
+
+<Tip>
+  The inspector provides real-time testing without writing any client code!
+</Tip>
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python server.py
+from typing import Annotated
+from mcp.types import ToolAnnotations
+from pydantic import Field
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="weather-server",
+    version="1.0.0",
+    description="A server providing weather information",
+)
+
+# Mock weather data
+weather_data = {
+    "san francisco": {"temp": 65, "condition": "Partly Cloudy", "humidity": 70},
+    "new york": {"temp": 45, "condition": "Sunny", "humidity": 55},
+    "tokyo": {"temp": 55, "condition": "Rainy", "humidity": 80},
+    "london": {"temp": 50, "condition": "Cloudy", "humidity": 75},
+}
+
+@server.tool(
+    name="get_current_weather",
+    description="Get current weather for a city",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_current_weather(
+    city: Annotated[str, Field(description="City name")],
+    units: Annotated[str, Field(description="Temperature units")] = "fahrenheit",
+) -> dict:
+    city_key = city.lower()
+    weather = weather_data.get(city_key)
+    
+    if not weather:
+        return {"error": f"Weather data not available for {city}"}
+    
+    temp = weather["temp"]
+    if units == "celsius":
+        temp = round((temp - 32) * 5/9)
+    
+    return {
+        "city": city,
+        "temperature": temp,
+        "units": units,
+        "condition": weather["condition"],
+        "humidity": weather["humidity"],
+    }
+
+if __name__ == "__main__":
+    server.run(transport="streamable-http", port=8000)
+```
+
+  </Tab>
+</Tabs>
+
+## Step 3: Add More Tools
+
+Let's add a forecast tool:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+server.tool({
+  name: "get_forecast",
+  description: "Get weather forecast for the next N days",
+  schema: z.object({
+    city: z.string().describe("City name"),
+    days: z.number().int().min(1).max(7).default(3),
+  }),
+}, async ({ city, days }) => {
+  const cityKey = city.toLowerCase();
+  const current = weatherData[cityKey];
+  
+  if (!current) {
+    return text(`Weather data not available for ${city}`);
+  }
+  
+  // Generate mock forecast
+  const forecast = Array.from({ length: days }, (_, i) => ({
+    day: i + 1,
+    date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toDateString(),
+    temp: current.temp + Math.floor(Math.random() * 10 - 5),
+    condition: current.condition,
+  }));
+  
+  return object({
+    city,
+    forecast,
+  });
+});
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+from datetime import datetime, timedelta
+import random
+
+@server.tool(
+    name="get_forecast",
+    description="Get weather forecast for the next N days",
+)
+async def get_forecast(
+    city: Annotated[str, Field(description="City name")],
+    days: Annotated[int, Field(ge=1, le=7, description="Number of days")] = 3,
+) -> dict:
+    city_key = city.lower()
+    current = weather_data.get(city_key)
+    
+    if not current:
+        return {"error": f"Weather data not available for {city}"}
+    
+    forecast = []
+    for i in range(days):
+        date = datetime.now() + timedelta(days=i)
+        forecast.append({
+            "day": i + 1,
+            "date": date.strftime("%Y-%m-%d"),
+            "temp": current["temp"] + random.randint(-5, 5),
+            "condition": current["condition"],
+        })
+    
+    return {
+        "city": city,
+        "forecast": forecast,
+    }
+```
+
+  </Tab>
+</Tabs>
+
+## Step 4: Add Resources
+
+Resources provide read-only data access:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+import { markdown } from "mcp-use/server";
+
+// Static resource
+server.resource({
+  name: "supported-cities",
+  uri: "weather://cities",
+  title: "Supported Cities",
+  description: "List of cities with weather data",
+}, async () => {
+  const cities = Object.keys(weatherData);
+  return object({
+    cities: cities.map(c => c.charAt(0).toUpperCase() + c.slice(1)),
+    count: cities.length,
+  });
+});
+
+// Dynamic resource with URI template
+server.resource({
+  name: "city-info",
+  uri: "weather://cities/{city}",
+  title: "City Weather Info",
+  description: "Detailed weather information for a specific city",
+}, async ({ city }) => {
+  const cityKey = city.toLowerCase();
+  const weather = weatherData[cityKey];
+  
+  if (!weather) {
+    return text(`No data for ${city}`);
+  }
+  
+  return markdown(`
+# Weather in ${city}
+
+- **Temperature**: ${weather.temp}°F
+- **Condition**: ${weather.condition}
+- **Humidity**: ${weather.humidity}%
+
+*Last updated: ${new Date().toLocaleString()}*
+  `);
+});
+```
+
+<Note>
+  Resources are cached by clients, making them ideal for frequently accessed data.
+</Note>
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+import json
+
+@server.resource(
+    name="supported-cities",
+    uri="weather://cities",
+    title="Supported Cities",
+    description="List of cities with weather data",
+)
+async def get_supported_cities() -> dict:
+    cities = [c.title() for c in weather_data.keys()]
+    return {
+        "cities": cities,
+        "count": len(cities),
+    }
+
+@server.resource(
+    name="city-info",
+    uri="weather://cities/{city}",
+    title="City Weather Info",
+)
+async def get_city_info(city: str) -> str:
+    city_key = city.lower()
+    weather = weather_data.get(city_key)
+    
+    if not weather:
+        return f"No data for {city}"
+    
+    return f"""
+# Weather in {city}
+
+- **Temperature**: {weather['temp']}°F
+- **Condition**: {weather['condition']}
+- **Humidity**: {weather['humidity']}%
+
+*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+    """
+```
+
+  </Tab>
+</Tabs>
+
+## Step 5: Add Prompts
+
+Prompts help AI models use your tools effectively:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+server.prompt({
+  name: "weather-report",
+  description: "Generate a comprehensive weather report",
+  schema: z.object({
+    city: z.string(),
+    includeAdvice: z.boolean().default(true),
+  }),
+}, async ({ city, includeAdvice }) => {
+  return text(`
+Generate a weather report for ${city}:
+
+1. Get current weather conditions
+2. Get 3-day forecast
+3. Summarize the information in a friendly tone
+${includeAdvice ? "4. Provide practical advice (what to wear, activities, etc.)" : ""}
+
+Format the report in a clear, conversational style.
+  `);
+});
+
+server.prompt({
+  name: "compare-cities",
+  description: "Compare weather between two cities",
+  schema: z.object({
+    city1: z.string(),
+    city2: z.string(),
+  }),
+}, async ({ city1, city2 }) => {
+  return text(`
+Compare the weather between ${city1} and ${city2}:
+
+1. Get current weather for both cities
+2. Compare temperatures, conditions, and humidity
+3. Recommend which city has better weather today
+4. Explain your reasoning
+  `);
+});
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+@server.prompt(
+    name="weather-report",
+    description="Generate a comprehensive weather report",
+)
+async def weather_report_prompt(
+    city: str,
+    include_advice: bool = True,
+) -> str:
+    advice = "4. Provide practical advice (what to wear, activities, etc.)" if include_advice else ""
+    
+    return f"""
+Generate a weather report for {city}:
+
+1. Get current weather conditions
+2. Get 3-day forecast
+3. Summarize the information in a friendly tone
+{advice}
+
+Format the report in a clear, conversational style.
+    """
+
+@server.prompt(
+    name="compare-cities",
+    description="Compare weather between two cities",
+)
+async def compare_cities_prompt(
+    city1: str,
+    city2: str,
+) -> str:
+    return f"""
+Compare the weather between {city1} and {city2}:
+
+1. Get current weather for both cities
+2. Compare temperatures, conditions, and humidity
+3. Recommend which city has better weather today
+4. Explain your reasoning
+    """
+```
+
+  </Tab>
+</Tabs>
+
+## Step 6: Test Everything
+
+<Steps>
+  <Step title="Open Inspector">
+    Navigate to http://localhost:3000/inspector (or :8000 for Python)
+  </Step>
+  
+  <Step title="Test Tools">
+    - Try `get_current_weather` with different cities
+    - Test `get_forecast` with various day counts
+    - Experiment with different units
+  </Step>
+  
+  <Step title="Access Resources">
+    - View `supported-cities` resource
+    - Read `city-info` for specific cities
+  </Step>
+  
+  <Step title="Try Prompts">
+    - Use `weather-report` prompt
+    - Compare cities with `compare-cities`
+  </Step>
+</Steps>
+
+## Step 7: Add Error Handling
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+server.tool({
+  name: "get_current_weather",
+  description: "Get current weather for a city",
+  schema: z.object({
+    city: z.string().min(1).describe("City name"),
+    units: z.enum(["celsius", "fahrenheit"]).default("fahrenheit"),
+  }),
+}, async ({ city, units }) => {
+  try {
+    const cityKey = city.toLowerCase().trim();
+    
+    if (!cityKey) {
+      return object({
+        error: "City name cannot be empty",
+        code: "INVALID_INPUT",
+      });
+    }
+    
+    const weather = weatherData[cityKey];
+    
+    if (!weather) {
+      return object({
+        error: `Weather data not available for '${city}'`,
+        code: "CITY_NOT_FOUND",
+        availableCities: Object.keys(weatherData),
+      });
+    }
+    
+    const temp = units === "celsius" 
+      ? Math.round((weather.temp - 32) * 5/9)
+      : weather.temp;
+    
+    return object({
+      success: true,
+      city,
+      temperature: temp,
+      units,
+      condition: weather.condition,
+      humidity: weather.humidity,
+    });
+  } catch (error) {
+    return object({
+      error: "An unexpected error occurred",
+      code: "INTERNAL_ERROR",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+@server.tool(
+    name="get_current_weather",
+    description="Get current weather for a city",
+)
+async def get_current_weather(
+    city: Annotated[str, Field(min_length=1, description="City name")],
+    units: Annotated[str, Field(description="Temperature units")] = "fahrenheit",
+) -> dict:
+    try:
+        city_key = city.lower().strip()
+        
+        if not city_key:
+            return {
+                "error": "City name cannot be empty",
+                "code": "INVALID_INPUT",
+            }
+        
+        weather = weather_data.get(city_key)
+        
+        if not weather:
+            return {
+                "error": f"Weather data not available for '{city}'",
+                "code": "CITY_NOT_FOUND",
+                "available_cities": list(weather_data.keys()),
+            }
+        
+        temp = weather["temp"]
+        if units == "celsius":
+            temp = round((temp - 32) * 5/9)
+        
+        return {
+            "success": True,
+            "city": city,
+            "temperature": temp,
+            "units": units,
+            "condition": weather["condition"],
+            "humidity": weather["humidity"],
+        }
+    except Exception as e:
+        return {
+            "error": "An unexpected error occurred",
+            "code": "INTERNAL_ERROR",
+            "message": str(e),
+        }
+```
+
+  </Tab>
+</Tabs>
+
+## Complete Server Code
+
+<Tabs>
+  <Tab title="TypeScript">
+
+<Accordion title="View Complete server.ts">
+
+```typescript
+import { MCPServer, text, object, markdown } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "weather-server",
+  version: "1.0.0",
+  description: "A server providing weather information and forecasts",
+});
+
+const weatherData: Record<string, any> = {
+  "san francisco": { temp: 65, condition: "Partly Cloudy", humidity: 70 },
+  "new york": { temp: 45, condition: "Sunny", humidity: 55 },
+  "tokyo": { temp: 55, condition: "Rainy", humidity: 80 },
+  "london": { temp: 50, condition: "Cloudy", humidity: 75 },
+};
+
+// TOOLS
+server.tool({
+  name: "get_current_weather",
+  description: "Get current weather for a city",
+  schema: z.object({
+    city: z.string().describe("City name"),
+    units: z.enum(["celsius", "fahrenheit"]).default("fahrenheit"),
+  }),
+}, async ({ city, units }) => {
+  const cityKey = city.toLowerCase();
+  const weather = weatherData[cityKey];
+  if (!weather) return text(`No data for ${city}`);
+  
+  const temp = units === "celsius" 
+    ? Math.round((weather.temp - 32) * 5/9)
+    : weather.temp;
+  
+  return object({
+    city, temperature: temp, units,
+    condition: weather.condition,
+    humidity: weather.humidity,
+  });
+});
+
+server.tool({
+  name: "get_forecast",
+  description: "Get weather forecast",
+  schema: z.object({
+    city: z.string(),
+    days: z.number().int().min(1).max(7).default(3),
+  }),
+}, async ({ city, days }) => {
+  const cityKey = city.toLowerCase();
+  const current = weatherData[cityKey];
+  if (!current) return text(`No data for ${city}`);
+  
+  const forecast = Array.from({ length: days }, (_, i) => ({
+    day: i + 1,
+    date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toDateString(),
+    temp: current.temp + Math.floor(Math.random() * 10 - 5),
+    condition: current.condition,
+  }));
+  
+  return object({ city, forecast });
+});
+
+// RESOURCES
+server.resource({
+  name: "supported-cities",
+  uri: "weather://cities",
+  title: "Supported Cities",
+}, async () => object({
+  cities: Object.keys(weatherData).map(c => c.charAt(0).toUpperCase() + c.slice(1)),
+  count: Object.keys(weatherData).length,
+}));
+
+server.resource({
+  name: "city-info",
+  uri: "weather://cities/{city}",
+  title: "City Weather Info",
+}, async ({ city }) => {
+  const weather = weatherData[city.toLowerCase()];
+  if (!weather) return text(`No data for ${city}`);
+  
+  return markdown(`
+# Weather in ${city}
+- **Temperature**: ${weather.temp}°F
+- **Condition**: ${weather.condition}
+- **Humidity**: ${weather.humidity}%
+  `);
+});
+
+// PROMPTS
+server.prompt({
+  name: "weather-report",
+  description: "Generate weather report",
+  schema: z.object({
+    city: z.string(),
+    includeAdvice: z.boolean().default(true),
+  }),
+}, async ({ city, includeAdvice }) => text(`
+Generate a weather report for ${city}...
+`));
+
+await server.listen(3000);
+console.log("✅ Weather Server running!");
+console.log("🔍 Inspector: http://localhost:3000/inspector");
+```
+
+</Accordion>
+
+  </Tab>
+  
+  <Tab title="Python">
+
+<Accordion title="View Complete server.py">
+
+```python
+from typing import Annotated
+from datetime import datetime, timedelta
+import random
+from mcp.types import ToolAnnotations
+from pydantic import Field
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="weather-server",
+    version="1.0.0",
+    description="A server providing weather information",
+)
+
+weather_data = {
+    "san francisco": {"temp": 65, "condition": "Partly Cloudy", "humidity": 70},
+    "new york": {"temp": 45, "condition": "Sunny", "humidity": 55},
+    "tokyo": {"temp": 55, "condition": "Rainy", "humidity": 80},
+    "london": {"temp": 50, "condition": "Cloudy", "humidity": 75},
+}
+
+@server.tool(name="get_current_weather")
+async def get_current_weather(
+    city: Annotated[str, Field(description="City name")],
+    units: str = "fahrenheit",
+) -> dict:
+    city_key = city.lower()
+    weather = weather_data.get(city_key)
+    if not weather:
+        return {"error": f"No data for {city}"}
+    
+    temp = weather["temp"]
+    if units == "celsius":
+        temp = round((temp - 32) * 5/9)
+    
+    return {
+        "city": city,
+        "temperature": temp,
+        "units": units,
+        "condition": weather["condition"],
+        "humidity": weather["humidity"],
+    }
+
+@server.tool(name="get_forecast")
+async def get_forecast(
+    city: str,
+    days: int = 3,
+) -> dict:
+    current = weather_data.get(city.lower())
+    if not current:
+        return {"error": f"No data for {city}"}
+    
+    forecast = []
+    for i in range(days):
+        date = datetime.now() + timedelta(days=i)
+        forecast.append({
+            "day": i + 1,
+            "date": date.strftime("%Y-%m-%d"),
+            "temp": current["temp"] + random.randint(-5, 5),
+            "condition": current["condition"],
+        })
+    
+    return {"city": city, "forecast": forecast}
+
+@server.resource(
+    name="supported-cities",
+    uri="weather://cities",
+)
+async def get_cities() -> dict:
+    return {
+        "cities": [c.title() for c in weather_data.keys()],
+        "count": len(weather_data),
+    }
+
+@server.prompt(name="weather-report")
+async def weather_report(city: str) -> str:
+    return f"Generate a weather report for {city}..."
+
+if __name__ == "__main__":
+    server.run(transport="streamable-http", port=8000)
+```
+
+</Accordion>
+
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Add Widgets" icon="mobile" href="/guides/building-mcp-apps">
+    Create interactive UI widgets for your server
+  </Card>
+  <Card title="Connect AI Agents" icon="robot" href="/guides/creating-agents">
+    Build agents that use your server's tools
+  </Card>
+  <Card title="Deploy to Production" icon="rocket" href="https://manufact.com">
+    Deploy your server to Manufact MCP Cloud
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples">
+    Explore more complex examples
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Inspector not loading">
+    Make sure:
+    - Server is running on the correct port
+    - No firewall blocking the connection
+    - Check browser console for errors
+  </Accordion>
+  
+  <Accordion title="Tools not appearing">
+    Verify:
+    - Tool registration syntax is correct
+    - Server restarted after changes
+    - No syntax errors in tool definitions
+  </Accordion>
+  
+  <Accordion title="Schema validation errors">
+    - Check Zod schema matches your data
+    - Ensure required fields are provided
+    - Validate enums and constraints
+  </Accordion>
+</AccordionGroup>

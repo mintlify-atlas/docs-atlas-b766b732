@@ -1,0 +1,384 @@
+---
+title: 'CLI Usage'
+description: 'Run the MCP Inspector locally with command-line options and configurations'
+icon: 'terminal'
+---
+
+# Inspector CLI
+
+Run the MCP Inspector locally with full control over configuration and auto-connect features.
+
+## Installation
+
+No installation required! Use `npx` to run the inspector:
+
+```bash
+npx @mcp-use/inspector
+```
+
+Or install globally for frequent use:
+
+```bash
+npm install -g @mcp-use/inspector
+mcp-inspect
+```
+
+## Basic Usage
+
+Start the inspector with default settings:
+
+```bash
+npx @mcp-use/inspector
+```
+
+This will:
+1. Start the inspector server on port 8080 (or next available)
+2. Automatically open your browser to `http://localhost:8080`
+3. Display the dashboard ready for connections
+
+## Command-Line Options
+
+### `--url <url>`
+
+Auto-connect to a specific MCP server on startup:
+
+```bash
+npx @mcp-use/inspector --url http://localhost:3000/mcp
+```
+
+**Supported URL formats:**
+- HTTP/HTTPS: `http://localhost:3000/mcp`
+- WebSocket: `ws://localhost:3000/mcp` or `wss://example.com/mcp`
+- Public servers: `https://mcp.linear.app/mcp`
+
+<Tip>
+  The inspector will automatically connect to the specified server when it opens.
+</Tip>
+
+### `--port <port>`
+
+Specify the starting port for the inspector server:
+
+```bash
+npx @mcp-use/inspector --port 9000
+```
+
+**Port selection behavior:**
+- If specified port is available, uses it
+- If port is in use, finds next available port
+- Valid range: 1-65535
+
+### `--help`, `-h`
+
+Display help information:
+
+```bash
+npx @mcp-use/inspector --help
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```bash Basic - Default Port
+npx @mcp-use/inspector
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:8080
+# 🌐 Browser opened
+```
+
+```bash Auto-Connect
+npx @mcp-use/inspector --url http://localhost:3000/mcp
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:8080
+# 📡 Auto-connecting to: http://localhost:3000/mcp
+# 🌐 Browser opened
+```
+
+```bash Custom Port
+npx @mcp-use/inspector --port 9000
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:9000
+# 🌐 Browser opened
+```
+
+```bash Combined Options
+npx @mcp-use/inspector --url http://localhost:3000/mcp --port 9000
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:9000
+# 📡 Auto-connecting to: http://localhost:3000/mcp
+# 🌐 Browser opened
+```
+
+```bash WebSocket Connection
+npx @mcp-use/inspector --url ws://localhost:3000/mcp
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:8080
+# 📡 Auto-connecting to: ws://localhost:3000/mcp
+# 🌐 Browser opened
+```
+
+```bash Public Server
+npx @mcp-use/inspector --url https://mcp.linear.app/mcp
+
+# Output:
+# 🚀 MCP Inspector running on http://localhost:8080
+# 📡 Auto-connecting to: https://mcp.linear.app/mcp
+# 🌐 Browser opened
+```
+
+</CodeGroup>
+
+## Development Workflow
+
+### Local MCP Server Testing
+
+When developing an MCP server locally:
+
+<Steps>
+  <Step title="Start Your MCP Server">
+    ```bash
+    # In terminal 1
+    cd my-mcp-server
+    npm run dev
+    ```
+
+    Server runs on `http://localhost:3000/mcp`
+  </Step>
+
+  <Step title="Start Inspector with Auto-Connect">
+    ```bash
+    # In terminal 2
+    npx @mcp-use/inspector --url http://localhost:3000/mcp
+    ```
+
+    Inspector opens and connects automatically.
+  </Step>
+
+  <Step title="Develop and Test">
+    - Make changes to your server code
+    - Server hot-reloads
+    - Inspector maintains connection
+    - Test new tools immediately
+  </Step>
+</Steps>
+
+### Multiple Server Testing
+
+Test multiple MCP servers simultaneously:
+
+```bash
+# Start inspector without auto-connect
+npx @mcp-use/inspector
+
+# Then manually connect to multiple servers:
+# - http://localhost:3000/mcp
+# - http://localhost:4000/mcp
+# - https://mcp.linear.app/mcp
+```
+
+All connections persist in the dashboard.
+
+## Package.json Scripts
+
+Add inspector to your project's scripts:
+
+```json package.json
+{
+  "scripts": {
+    "dev": "mcp-use dev",
+    "inspect": "npx @mcp-use/inspector --url http://localhost:3000/mcp",
+    "dev:all": "concurrently \"npm run dev\" \"npm run inspect\""
+  }
+}
+```
+
+Then run:
+
+```bash
+# Start both server and inspector
+npm run dev:all
+```
+
+## Environment Variables
+
+The inspector respects these environment variables:
+
+### `PORT`
+
+Default port for the inspector server:
+
+```bash
+PORT=9000 npx @mcp-use/inspector
+```
+
+### `MCP_SERVER_URL`
+
+Default MCP server URL (alternative to `--url` flag):
+
+```bash
+MCP_SERVER_URL=http://localhost:3000/mcp npx @mcp-use/inspector
+```
+
+### `NODE_ENV`
+
+Environment mode:
+
+```bash
+NODE_ENV=production npx @mcp-use/inspector
+```
+
+## Docker Usage
+
+Run inspector in a Docker container:
+
+```bash
+# Pull the image
+docker pull mcpuse/inspector:latest
+
+# Run with default settings
+docker run -p 8080:8080 mcpuse/inspector:latest
+
+# Run with environment variables
+docker run -p 8080:8080 \
+  -e MCP_SERVER_URL=http://host.docker.internal:3000/mcp \
+  mcpuse/inspector:latest
+```
+
+<Note>
+  Use `host.docker.internal` to connect to services running on your host machine from Docker.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port Already in Use" icon="circle-xmark">
+    **Error:**
+    ```
+    Error: Port 8080 is already in use
+    ```
+
+    **Solutions:**
+    
+    1. Use a different port:
+       ```bash
+       npx @mcp-use/inspector --port 9000
+       ```
+
+    2. Find and kill the process using the port:
+       ```bash
+       # macOS/Linux
+       lsof -ti:8080 | xargs kill -9
+
+       # Windows
+       netstat -ano | findstr :8080
+       taskkill /PID <PID> /F
+       ```
+  </Accordion>
+
+  <Accordion title="Browser Doesn't Open" icon="browser">
+    **Possible causes:**
+    - Browser not found in PATH
+    - Headless environment
+    - Permission issues
+
+    **Solution:**
+    
+    Manually open the URL shown in terminal:
+    ```
+    🚀 MCP Inspector running on http://localhost:8080
+    ```
+  </Accordion>
+
+  <Accordion title="Auto-Connect Fails" icon="plug">
+    **Error:**
+    ```
+    Failed to connect to http://localhost:3000/mcp
+    ```
+
+    **Checklist:**
+    - ✅ MCP server is running
+    - ✅ URL is correct (check protocol and path)
+    - ✅ Server is accessible from inspector
+    - ✅ CORS is properly configured on server
+
+    **Test connection:**
+    ```bash
+    curl http://localhost:3000/mcp
+    ```
+  </Accordion>
+
+  <Accordion title="Invalid URL Format" icon="triangle-exclamation">
+    **Error:**
+    ```
+    Error: Invalid URL format: localhost:3000/mcp
+    ```
+
+    **Solution:**
+    
+    URLs must include protocol:
+    ```bash
+    # ❌ Wrong
+    --url localhost:3000/mcp
+
+    # ✅ Correct
+    --url http://localhost:3000/mcp
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Usage
+
+### Custom CORS Configuration
+
+The inspector includes built-in CORS middleware for proxying requests:
+
+```typescript
+// Inspector automatically handles:
+// - Origin: *
+// - Exposed Headers: All
+// - Credentials: include
+```
+
+This allows connecting to MCP servers from different origins.
+
+### Health Check Endpoint
+
+The inspector exposes a health check endpoint:
+
+```bash
+curl http://localhost:8080/inspector/health
+
+# Response:
+{"status": "ok"}
+```
+
+Useful for:
+- Load balancer health checks
+- Monitoring scripts
+- CI/CD pipelines
+
+### Proxy API
+
+The inspector includes a proxy API for CORS-restricted servers:
+
+```bash
+# Proxy requests through inspector
+curl http://localhost:8080/inspector/api/proxy/mcp
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Features" icon="sparkles" href="/tools/inspector/features">
+    Explore all inspector testing capabilities
+  </Card>
+  <Card title="Self-Hosting" icon="server" href="/tools/inspector/self-hosting">
+    Deploy your own inspector instance
+  </Card>
+</CardGroup>

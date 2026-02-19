@@ -1,0 +1,294 @@
+---
+title: 'MCPAgent Overview'
+description: 'Build intelligent AI agents with MCP tool access'
+icon: 'robot'
+---
+
+# MCPAgent Overview
+
+`MCPAgent` is a high-level AI agent that seamlessly integrates language models with MCP tools, resources, and prompts. It handles the complexity of tool calling, conversation management, and server connections, letting you focus on building intelligent applications.
+
+## Key Features
+
+- **Simple API** - Create agents with just an LLM string and server config
+- **Multi-Provider Support** - Works with OpenAI, Anthropic, Google, Groq, and more
+- **Conversation Memory** - Built-in context management across interactions
+- **Streaming** - Real-time access to agent reasoning and tool calls
+- **Server Management** - Dynamic server connection and tool discovery
+- **Observability** - Integrated tracing and monitoring support
+- **Type-Safe** - Full TypeScript support with Zod schemas
+
+## Quick Example
+
+Create an agent that can access the filesystem:
+
+```typescript
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    }
+  },
+  maxSteps: 10
+});
+
+const result = await agent.run(
+  'List the top 5 files in the current directory'
+);
+
+console.log(result);
+
+await agent.close();
+```
+
+## How It Works
+
+1. **Initialization** - Agent connects to MCP servers and loads tools
+2. **Query Processing** - User query is sent to the language model
+3. **Tool Execution** - Agent automatically calls MCP tools as needed
+4. **Reasoning Loop** - Agent iterates until it reaches a conclusion
+5. **Response** - Final answer is returned to the user
+
+## Agent Modes
+
+### Simplified Mode
+
+Quick setup with minimal configuration:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',              // Simple string format
+  mcpServers: {                       // Server configs
+    filesystem: { command: 'npx', args: [...] }
+  }
+});
+```
+
+The agent automatically:
+- Creates the LLM instance
+- Initializes the MCP client
+- Manages server connections
+- Handles cleanup
+
+### Explicit Mode
+
+Full control over components:
+
+```typescript
+import { ChatOpenAI } from '@langchain/openai';
+import { MCPClient } from 'mcp-use/client';
+
+const client = new MCPClient('./mcp-config.json');
+const llm = new ChatOpenAI({ model: 'gpt-4o' });
+
+const agent = new MCPAgent({
+  llm,
+  client,
+  maxSteps: 15
+});
+```
+
+Use this when you need:
+- Custom LLM configuration
+- Shared client instances
+- Fine-grained control
+
+## Agent Configuration
+
+```typescript
+const agent = new MCPAgent({
+  // LLM configuration
+  llm: 'openai/gpt-4o',
+  llmConfig: {
+    temperature: 0.3,
+    maxTokens: 1000
+  },
+  
+  // MCP servers
+  mcpServers: {
+    filesystem: { command: 'npx', args: [...] },
+    github: { url: 'https://api.example.com/mcp' }
+  },
+  
+  // Agent behavior
+  maxSteps: 10,                      // Max reasoning iterations
+  memoryEnabled: true,               // Conversation history
+  verbose: false,                    // Debug logging
+  
+  // Prompts
+  systemPrompt: 'Custom instructions...',
+  additionalInstructions: 'Extra context...',
+  
+  // Tools
+  disallowedTools: ['dangerous_tool'],
+  additionalTools: [customTool],
+  
+  // Advanced
+  useServerManager: false,           // Dynamic server switching
+  observe: true,                     // Telemetry tracking
+  callbacks: [customHandler]         // LangChain callbacks
+});
+```
+
+## Core Methods
+
+### run()
+
+Execute a query and get the final result:
+
+```typescript
+const result = await agent.run('What files are here?');
+```
+
+With structured output:
+
+```typescript
+const schema = z.object({
+  files: z.array(z.string()),
+  count: z.number()
+});
+
+const result = await agent.run({
+  prompt: 'List files in this directory',
+  schema
+});
+// result is typed: { files: string[], count: number }
+```
+
+### stream()
+
+Get intermediate steps in real-time:
+
+```typescript
+const stream = agent.stream('Complex task');
+
+for await (const step of stream) {
+  console.log('Tool:', step.action.tool);
+  console.log('Input:', step.action.toolInput);
+  console.log('Output:', step.observation);
+}
+```
+
+### streamEvents()
+
+Fine-grained token-level streaming:
+
+```typescript
+for await (const event of agent.streamEvents('Write a report')) {
+  if (event.event === 'on_chat_model_stream') {
+    process.stdout.write(event.data.chunk.text);
+  }
+}
+```
+
+## Memory Management
+
+Agents maintain conversation history automatically:
+
+```typescript
+// First query
+await agent.run('My name is Alice');
+
+// Second query - agent remembers context
+await agent.run('What is my name?');
+// Response: "Your name is Alice"
+
+// View history
+const history = agent.getConversationHistory();
+
+// Clear history
+agent.clearConversationHistory();
+
+// Disable memory
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  memoryEnabled: false
+});
+```
+
+## Multi-Server Support
+
+Connect to multiple MCP servers:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '.']
+    },
+    github: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_TOKEN: 'your-token' }
+    },
+    remote: {
+      url: 'https://api.example.com/mcp'
+    }
+  }
+});
+
+// Agent has access to all tools from all servers
+const result = await agent.run(
+  'List files, then create a GitHub issue for any TODOs found'
+);
+```
+
+## Error Handling
+
+```typescript
+try {
+  const result = await agent.run('Complex query', {
+    maxSteps: 5,
+    signal: AbortSignal.timeout(30000) // 30 second timeout
+  });
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.error('Query timed out');
+  } else {
+    console.error('Agent error:', error);
+  }
+} finally {
+  await agent.close();
+}
+```
+
+## Performance Tips
+
+1. **Reuse agents** - Don't create a new agent for each query
+2. **Set reasonable maxSteps** - Prevent infinite loops (default: 5)
+3. **Use abort signals** - Implement timeouts for long operations
+4. **Disable memory when not needed** - Saves tokens
+5. **Clean up** - Always call `agent.close()` when done
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/typescript/agent/basic-usage">
+    Learn core agent operations
+  </Card>
+  <Card title="Streaming" icon="broadcast-tower" href="/typescript/agent/streaming">
+    Real-time agent execution
+  </Card>
+  <Card title="Memory Management" icon="brain" href="/typescript/agent/memory">
+    Conversation history
+  </Card>
+  <Card title="Server Manager" icon="server" href="/typescript/agent/server-manager">
+    Dynamic server switching
+  </Card>
+</CardGroup>
+
+## Examples
+
+Browse complete examples:
+
+- [Simplified Agent](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/agent/basic/simplified_agent_example.ts)
+- [Streaming Example](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/agent/advanced/stream_example.ts)
+- [Chat Example](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/agent/basic/chat_example.ts)
+- [Multi-Server Example](https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples/agent/server-management/multi_server_example.ts)

@@ -1,0 +1,317 @@
+---
+title: 'Getting Started'
+description: 'Connect to MCP servers and start testing your tools in minutes'
+icon: 'play'
+---
+
+# Getting Started with Inspector
+
+This guide will walk you through connecting to an MCP server and testing your first tool.
+
+## Accessing the Inspector
+
+Choose the method that works best for your workflow:
+
+<Tabs>
+  <Tab title="Online">
+    Visit [inspector.mcp-use.com](https://inspector.mcp-use.com/inspector)
+
+    **Best for:**
+    - Quick testing without installation
+    - Exploring public MCP servers
+    - Sharing with team members
+  </Tab>
+  
+  <Tab title="NPX">
+    ```bash
+    npx @mcp-use/inspector
+    ```
+
+    Opens at `http://localhost:8080`
+
+    **Best for:**
+    - Local development
+    - Testing private servers
+    - Offline work
+  </Tab>
+  
+  <Tab title="Auto-Mounted">
+    ```typescript
+    import { MCPServer } from "mcp-use/server";
+
+    const server = new MCPServer({
+      name: "my-server",
+      version: "1.0.0",
+    });
+
+    server.listen(3000);
+    ```
+
+    Available at `http://localhost:3000/inspector`
+
+    **Best for:**
+    - Integrated development workflow
+    - Always-on debugging access
+    - Production testing
+  </Tab>
+</Tabs>
+
+## The Dashboard
+
+When you open the inspector, you'll see the main dashboard with two panels:
+
+- **Connected Servers** (left): Shows all your active MCP server connections
+- **Connect Panel** (right): Add new server connections
+
+<Frame>
+  <img src="/images/inspector-dashboard.png" alt="Inspector Dashboard" />
+</Frame>
+
+## Connecting to a Server
+
+Follow these steps to connect to an MCP server:
+
+<Steps>
+  <Step title="Open Connect Panel">
+    Click the **Connect** panel on the right side of the dashboard.
+  </Step>
+
+  <Step title="Select Transport Type">
+    Choose your connection transport:
+
+    <Tabs>
+      <Tab title="Streamable HTTP">
+        For SSE (Server-Sent Events) connections. Most common for HTTP-based MCP servers.
+
+        ```
+        http://localhost:3000/mcp
+        ```
+      </Tab>
+      
+      <Tab title="WebSocket">
+        For WebSocket connections. Better for real-time bidirectional communication.
+
+        ```
+        ws://localhost:3000/mcp
+        ```
+      </Tab>
+      
+      <Tab title="stdin/stdio">
+        For local process connections (advanced use case).
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Enter Server URL">
+    Input your MCP server endpoint:
+
+    **Public servers:**
+    ```
+    https://mcp.linear.app/mcp
+    ```
+
+    **Local development:**
+    ```
+    http://localhost:3000/mcp
+    ```
+  </Step>
+
+  <Step title="Configure Authentication (Optional)">
+    If your server requires authentication:
+
+    <AccordionGroup>
+      <Accordion title="OAuth">
+        1. Enter OAuth credentials
+        2. Click **Connect**
+        3. Approve access in popup window
+        4. Inspector handles redirect automatically
+      </Accordion>
+
+      <Accordion title="API Headers">
+        Add custom headers for API key authentication:
+
+        ```json
+        {
+          "Authorization": "Bearer YOUR_API_KEY",
+          "X-API-Key": "your-key-here"
+        }
+        ```
+      </Accordion>
+    </AccordionGroup>
+  </Step>
+
+  <Step title="Click Connect">
+    The inspector will establish the connection and show the server in your **Connected Servers** list with a green status indicator.
+  </Step>
+</Steps>
+
+## Your First Tool Test
+
+Once connected, let's test a tool:
+
+<Steps>
+  <Step title="Select Server">
+    In the **Connected Servers** panel, click **"Inspect"** on your connected server.
+  </Step>
+
+  <Step title="Open Tools Tab">
+    You'll see the server detail view with multiple tabs. The **Tools** tab is selected by default.
+  </Step>
+
+  <Step title="Browse Tools">
+    Scroll through the list of available tools. Each tool shows:
+    - Tool name
+    - Description
+    - Number of parameters
+  </Step>
+
+  <Step title="Select a Tool">
+    Click on a tool to view its detailed schema and input parameters.
+  </Step>
+
+  <Step title="Enter Parameters">
+    Fill in the JSON input panel with the required parameters:
+
+    ```json
+    {
+      "city": "San Francisco"
+    }
+    ```
+
+    <Tip>
+      The inspector validates your input against the tool's schema in real-time.
+    </Tip>
+  </Step>
+
+  <Step title="Execute">
+    Click the **"Execute"** button to run the tool.
+  </Step>
+
+  <Step title="View Results">
+    Results appear in the output panel with:
+    - Syntax-highlighted JSON
+    - Execution time
+    - Success/error status
+    - Widget rendering (if applicable)
+  </Step>
+</Steps>
+
+## Example: Testing the Linear MCP Server
+
+Let's walk through a complete example using the Linear MCP server:
+
+<CodeGroup>
+
+```text Connect
+URL: https://mcp.linear.app/mcp
+Transport: Streamable HTTP
+```
+
+```json Authenticate
+1. Click Connect
+2. Approve Linear OAuth in popup
+3. Wait for green status indicator
+```
+
+```json Test create_issue Tool
+{
+  "title": "Test issue from Inspector",
+  "description": "Testing the Linear MCP integration",
+  "teamId": "your-team-id"
+}
+```
+
+```json View Response
+{
+  "success": true,
+  "issueId": "ISS-123",
+  "url": "https://linear.app/team/issue/ISS-123"
+}
+```
+
+</CodeGroup>
+
+## Keyboard Shortcuts
+
+Speed up your workflow with keyboard shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + K` | Open quick search and navigation |
+| `Esc` | Close modals and overlays |
+
+### Quick Search Features
+
+Press `Cmd/Ctrl + K` to:
+- Quickly connect to a new server
+- Jump to recently used servers
+- Search and execute tools directly
+- Navigate to different tabs
+- Access documentation
+
+## Session Persistence
+
+The inspector automatically saves your work:
+
+<Check>
+  **Persisted across reloads:**
+  - Server connections
+  - Authentication credentials
+  - Session preferences
+  - Recent tool calls
+</Check>
+
+Clear all sessions anytime with the **"Clear All"** button in the top bar.
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Connection Failed" icon="circle-xmark">
+    **Possible causes:**
+    - Server URL is incorrect
+    - Server is not running
+    - CORS issues (for remote servers)
+    - Network/firewall blocking connection
+
+    **Solutions:**
+    - Verify server URL and port
+    - Check server logs for errors
+    - Ensure server allows CORS from inspector origin
+    - Test with `curl` to confirm server is responding
+  </Accordion>
+
+  <Accordion title="OAuth Not Working" icon="lock">
+    **Possible causes:**
+    - Popup blocked by browser
+    - Invalid OAuth credentials
+    - Redirect URL not configured
+
+    **Solutions:**
+    - Allow popups for the inspector domain
+    - Verify OAuth client ID and secret
+    - Check OAuth redirect URLs in provider settings
+  </Accordion>
+
+  <Accordion title="Tools Not Appearing" icon="wrench">
+    **Possible causes:**
+    - Server hasn't registered tools yet
+    - Connection established before server ready
+    - Server error during tool registration
+
+    **Solutions:**
+    - Disconnect and reconnect
+    - Check server logs for registration errors
+    - Verify tools are properly exported in server code
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Explore Features" icon="sparkles" href="/tools/inspector/features">
+    Learn about testing resources, prompts, and using chat
+  </Card>
+  <Card title="CLI Options" icon="terminal" href="/tools/inspector/cli">
+    Run inspector locally with advanced options
+  </Card>
+</CardGroup>

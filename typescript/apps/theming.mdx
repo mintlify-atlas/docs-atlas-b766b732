@@ -1,0 +1,569 @@
+---
+title: "Theming and Styling"
+description: "Style widgets with dark mode, Tailwind CSS, and design tokens"
+---
+
+# Theming and Styling
+
+Learn how to style MCP widgets with automatic dark mode support, Tailwind CSS, and platform-specific design tokens.
+
+## Theme System
+
+mcp-use widgets automatically adapt to the user's theme preference in ChatGPT and Claude Desktop.
+
+### Theme Detection
+
+The `useWidget` hook provides the current theme:
+
+```tsx
+import { useWidget } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const { theme } = useWidget()  // "light" | "dark"
+
+  return (
+    <div className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
+      Current theme: {theme}
+    </div>
+  )
+}
+```
+
+### Automatic Theme Application
+
+The `ThemeProvider` component automatically:
+- Detects theme from platform API or system preference
+- Applies `dark` class to document root for Tailwind
+- Sets `data-theme` attribute for design tokens
+- Updates `color-scheme` CSS property
+
+```tsx
+import { McpUseProvider } from 'mcp-use/react'
+
+const MyWidget = () => {
+  return (
+    <McpUseProvider>
+      {/* Theme is automatically managed */}
+      <div className="bg-white dark:bg-gray-800">
+        Content
+      </div>
+    </McpUseProvider>
+  )
+}
+```
+
+## Tailwind CSS
+
+### Dark Mode Classes
+
+Use Tailwind's `dark:` variant for dark mode styles:
+
+```tsx
+const MyWidget = () => {
+  return (
+    <div className="
+      bg-white dark:bg-gray-800
+      text-gray-900 dark:text-white
+      border-gray-200 dark:border-gray-700
+    ">
+      <h1 className="text-2xl font-bold">Hello</h1>
+      <p className="text-gray-600 dark:text-gray-400">
+        This text adapts to theme
+      </p>
+    </div>
+  )
+}
+```
+
+### Color Palette
+
+Recommended color system for widgets:
+
+```tsx
+// Backgrounds
+className="bg-white dark:bg-gray-900"              // Primary background
+className="bg-gray-50 dark:bg-gray-800"            // Secondary background
+className="bg-gray-100 dark:bg-gray-700"           // Tertiary background
+
+// Text
+className="text-gray-900 dark:text-white"          // Primary text
+className="text-gray-600 dark:text-gray-400"       // Secondary text
+className="text-gray-500 dark:text-gray-500"       // Tertiary text
+
+// Borders
+className="border-gray-200 dark:border-gray-700"   // Default border
+className="border-gray-300 dark:border-gray-600"   // Stronger border
+
+// Accents
+className="bg-blue-500 dark:bg-blue-600"           // Primary action
+className="text-blue-600 dark:text-blue-400"       // Links
+```
+
+### Gradients
+
+Create theme-adaptive gradients:
+
+```tsx
+<div className="
+  bg-gradient-to-br
+  from-blue-50 to-blue-100
+  dark:from-blue-900/20 dark:to-blue-800/20
+">
+  Gradient background
+</div>
+```
+
+### Shadows
+
+```tsx
+<div className="
+  shadow-sm dark:shadow-none
+  ring-1 ring-gray-200 dark:ring-gray-700
+">
+  Card with subtle shadow
+</div>
+```
+
+## CSS Custom Properties
+
+For more control, use CSS variables with theme support:
+
+```css styles.css
+:root {
+  --color-primary: #3b82f6;
+  --color-background: #ffffff;
+  --color-text: #1f2937;
+}
+
+:root[data-theme="dark"] {
+  --color-primary: #60a5fa;
+  --color-background: #1f2937;
+  --color-text: #f9fafb;
+}
+
+.my-element {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+```
+
+Use in React:
+
+```tsx
+const MyWidget = () => {
+  return (
+    <div style={{
+      backgroundColor: 'var(--color-background)',
+      color: 'var(--color-text)'
+    }}>
+      Content
+    </div>
+  )
+}
+```
+
+## CSS light-dark() Function
+
+Modern CSS supports theme-aware colors natively:
+
+```css
+.my-element {
+  /* Automatically switches based on color-scheme */
+  background: light-dark(white, #1f2937);
+  color: light-dark(#1f2937, white);
+}
+```
+
+<Note>
+  The `ThemeProvider` automatically sets `color-scheme` property, enabling `light-dark()` to work.
+</Note>
+
+## OpenAI Apps SDK Design Tokens
+
+When building for ChatGPT, you can use OpenAI's design tokens for native-looking widgets.
+
+### Setup
+
+Install the Apps SDK UI library:
+
+```bash
+npm install @openai/apps-sdk-ui
+```
+
+### Usage
+
+```tsx
+import { AppsSDKUIProvider } from '@openai/apps-sdk-ui/components/AppsSDKUIProvider'
+import { McpUseProvider } from 'mcp-use/react'
+
+const MyWidget = () => {
+  return (
+    <McpUseProvider>
+      <AppsSDKUIProvider>
+        <div className="bg-surface-elevated text-primary">
+          <h1 className="heading-xl">Hello</h1>
+          <p className="text-md text-secondary">
+            This uses OpenAI design tokens
+          </p>
+        </div>
+      </AppsSDKUIProvider>
+    </McpUseProvider>
+  )
+}
+```
+
+### Design Token Classes
+
+**Typography:**
+```tsx
+className="heading-xl"      // Large heading
+className="heading-lg"      // Medium heading
+className="heading-md"      // Small heading
+className="text-lg"         // Large body text
+className="text-md"         // Medium body text
+className="text-sm"         // Small body text
+```
+
+**Colors:**
+```tsx
+className="text-primary"    // Primary text color
+className="text-secondary"  // Secondary text color
+className="text-tertiary"   // Tertiary text color
+className="bg-surface-elevated"  // Elevated surface
+className="border-default"  // Default border color
+```
+
+**Complete Example:**
+```tsx
+import { AppsSDKUIProvider } from '@openai/apps-sdk-ui/components/AppsSDKUIProvider'
+import { McpUseProvider, useWidget } from 'mcp-use/react'
+
+const ProductCard = () => {
+  const { props } = useWidget<ProductProps>()
+
+  return (
+    <McpUseProvider>
+      <AppsSDKUIProvider>
+        <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+          <h5 className="text-secondary mb-1">Product</h5>
+          <h2 className="heading-xl mb-3">{props.name}</h2>
+          <p className="text-md text-secondary">{props.description}</p>
+          <div className="mt-4 text-lg font-semibold">${props.price}</div>
+        </div>
+      </AppsSDKUIProvider>
+    </McpUseProvider>
+  )
+}
+```
+
+## Component Styling Best Practices
+
+### 1. Consistent Spacing
+
+Use Tailwind's spacing scale:
+
+```tsx
+<div className="p-8">        {/* Padding: 2rem */}
+  <h1 className="mb-6">Title</h1>  {/* Margin bottom: 1.5rem */}
+  <p className="mb-4">Text</p>     {/* Margin bottom: 1rem */}
+</div>
+```
+
+### 2. Rounded Corners
+
+Use generous border radius for modern look:
+
+```tsx
+className="rounded-xl"   // 0.75rem
+className="rounded-2xl"  // 1rem
+className="rounded-3xl"  // 1.5rem
+```
+
+### 3. Loading States
+
+Animate loading indicators:
+
+```tsx
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400" />
+  </div>
+)
+```
+
+### 4. Interactive States
+
+Style hover, focus, and active states:
+
+```tsx
+<button className="
+  px-4 py-2 rounded-lg
+  bg-blue-600 hover:bg-blue-700
+  text-white font-medium
+  transition-colors duration-200
+  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+  dark:focus:ring-offset-gray-900
+  disabled:opacity-50 disabled:cursor-not-allowed
+">
+  Click Me
+</button>
+```
+
+### 5. Responsive Design
+
+Adapt to different container sizes:
+
+```tsx
+<div className="
+  grid gap-4
+  grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+">
+  {items.map(item => <Card key={item.id} {...item} />)}
+</div>
+```
+
+## Theme-Aware Assets
+
+Load different images for light/dark mode:
+
+```tsx
+import { useWidget } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const { theme } = useWidget()
+
+  return (
+    <img
+      src={theme === 'dark' ? '/logo-dark.png' : '/logo-light.png'}
+      alt="Logo"
+    />
+  )
+}
+```
+
+Or use CSS:
+
+```css
+.logo {
+  content: url('/logo-light.png');
+}
+
+.dark .logo {
+  content: url('/logo-dark.png');
+}
+```
+
+## Accessibility
+
+### Contrast Ratios
+
+Ensure sufficient contrast in both themes:
+
+```tsx
+// Good: High contrast in both themes
+<div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+  Content
+</div>
+
+// Bad: Low contrast in dark mode
+<div className="bg-gray-800 text-gray-600">
+  Hard to read
+</div>
+```
+
+### Focus Indicators
+
+Provide visible focus states:
+
+```tsx
+<button className="
+  focus:outline-none
+  focus:ring-2 focus:ring-blue-500
+  focus:ring-offset-2
+  dark:focus:ring-offset-gray-900
+">
+  Accessible Button
+</button>
+```
+
+### Semantic Color Use
+
+Use colors consistently:
+
+```tsx
+// Success
+className="text-green-600 dark:text-green-400"
+
+// Warning
+className="text-yellow-600 dark:text-yellow-400"
+
+// Error
+className="text-red-600 dark:text-red-400"
+
+// Info
+className="text-blue-600 dark:text-blue-400"
+```
+
+## Platform-Specific Styling
+
+Detect platform and apply specific styles:
+
+```tsx
+import { useWidget } from 'mcp-use/react'
+
+const MyWidget = () => {
+  const { userAgent } = useWidget()
+  const isMobile = userAgent?.device.type === 'mobile'
+
+  return (
+    <div className={isMobile ? 'p-4' : 'p-8'}>
+      {isMobile ? 'Mobile layout' : 'Desktop layout'}
+    </div>
+  )
+}
+```
+
+## Complete Example
+
+Putting it all together:
+
+```tsx widget.tsx
+import { McpUseProvider, useWidget } from 'mcp-use/react'
+import { z } from 'zod'
+import './styles.css'
+
+const propSchema = z.object({
+  title: z.string(),
+  items: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    value: z.number()
+  }))
+})
+
+export const widgetMetadata = {
+  description: 'Display items with theme support',
+  props: propSchema
+}
+
+type Props = z.infer<typeof propSchema>
+
+const ThemedWidget = () => {
+  const { props, isPending, callTool } = useWidget<Props>()
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="
+      bg-white dark:bg-gray-900
+      border border-gray-200 dark:border-gray-700
+      rounded-3xl p-8
+      shadow-sm dark:shadow-none
+    ">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        {props.title}
+      </h2>
+
+      <div className="grid gap-4">
+        {props.items.map(item => (
+          <div
+            key={item.id}
+            className="
+              bg-gray-50 dark:bg-gray-800
+              border border-gray-200 dark:border-gray-700
+              rounded-xl p-4
+              transition-colors duration-200
+              hover:bg-gray-100 dark:hover:bg-gray-750
+            "
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-gray-900 dark:text-white">
+                {item.name}
+              </span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {item.value}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => callTool('refresh', {})}
+        className="
+          mt-6 w-full
+          px-4 py-2 rounded-lg
+          bg-blue-600 hover:bg-blue-700
+          dark:bg-blue-500 dark:hover:bg-blue-600
+          text-white font-medium
+          transition-colors duration-200
+          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+          dark:focus:ring-offset-gray-900
+        "
+      >
+        Refresh Data
+      </button>
+    </div>
+  )
+}
+
+const Widget = () => (
+  <McpUseProvider>
+    <ThemedWidget />
+  </McpUseProvider>
+)
+
+export default Widget
+```
+
+## CSS Styles
+
+```css styles.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Custom utilities */
+.bg-gray-750 {
+  background-color: rgb(42, 48, 60);
+}
+
+/* Theme-specific overrides */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ChatGPT Integration" icon="openai" href="/typescript/apps/chatgpt-integration">
+    Deploy widgets to ChatGPT with Apps SDK
+  </Card>
+  <Card title="Claude Integration" icon="message-bot" href="/typescript/apps/claude-integration">
+    Use widgets in Claude Desktop
+  </Card>
+  <Card title="React Hooks" icon="react" href="/typescript/apps/react-hooks">
+    Learn about useWidget and other hooks
+  </Card>
+</CardGroup>

@@ -1,0 +1,401 @@
+---
+title: "MCP Servers vs MCP Apps"
+description: "Understanding the difference between MCP Servers and MCP Apps"
+icon: "layer-group"
+---
+
+## Overview
+
+**mcp-use** enables you to build two types of MCP implementations:
+
+<CardGroup cols={2}>
+  <Card title="MCP Servers" icon="server">
+    Backend services that expose tools, resources, and prompts to AI agents
+  </Card>
+  <Card title="MCP Apps" icon="mobile">
+    Interactive widgets with UI components that work across ChatGPT, Claude, and other clients
+  </Card>
+</CardGroup>
+
+## MCP Servers
+
+### What are MCP Servers?
+
+MCP Servers are backend services that implement the Model Context Protocol to provide tools, resources, and prompts that AI agents can use. They are headless services focused on functionality rather than presentation.
+
+### Key Characteristics
+
+<AccordionGroup>
+  <Accordion title="Tool-Focused">
+    MCP Servers primarily expose tools (functions) that AI agents can call to perform actions:
+    
+    ```typescript
+    server.tool({
+      name: "search_database",
+      description: "Search the product database",
+      schema: z.object({
+        query: z.string(),
+        limit: z.number().optional(),
+      }),
+    }, async ({ query, limit = 10 }) => {
+      const results = await db.search(query, limit);
+      return text(JSON.stringify(results));
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="No User Interface">
+    MCP Servers return structured data (text, JSON, binary) without any UI components. The AI client decides how to present the data to users.
+    
+    ```typescript
+    // Server returns data
+    return text("Temperature: 72°F");
+    
+    // Client/AI decides how to display it
+    ```
+  </Accordion>
+  
+  <Accordion title="Stateless Operations">
+    Each tool call is typically independent and stateless:
+    
+    ```typescript
+    server.tool({
+      name: "calculate",
+      schema: z.object({ expression: z.string() }),
+    }, async ({ expression }) => {
+      const result = eval(expression);
+      return text(`Result: ${result}`);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Resource Access">
+    Servers can expose resources for AI agents to read:
+    
+    ```typescript
+    server.resource({
+      name: "config",
+      uri: "app://config",
+      title: "Application Configuration",
+    }, async () => {
+      const config = await loadConfig();
+      return text(JSON.stringify(config));
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### When to Use MCP Servers
+
+Use MCP Servers when you need:
+
+- 🛠️ **Programmatic access** to APIs and services
+- 🤖 **Tool-based interactions** for AI agents
+- 📋 **Data retrieval** from databases or files
+- ⚙️ **Background processing** without UI requirements
+- 🔌 **Integration** with existing backend services
+
+### Example: Simple MCP Server
+
+```typescript
+import { MCPServer, text } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "weather-server",
+  version: "1.0.0",
+});
+
+server.tool({
+  name: "get_weather",
+  description: "Get weather for a city",
+  schema: z.object({ city: z.string() }),
+}, async ({ city }) => {
+  const weather = await fetchWeather(city);
+  return text(`${city}: ${weather.temp}°F, ${weather.condition}`);
+});
+
+await server.listen(3000);
+```
+
+## MCP Apps
+
+### What are MCP Apps?
+
+MCP Apps extend MCP Servers with interactive UI widgets that render in AI clients like ChatGPT and Claude. They combine backend functionality with frontend presentation in a unified package.
+
+### Key Characteristics
+
+<AccordionGroup>
+  <Accordion title="Interactive Widgets">
+    MCP Apps include React components that render in the client:
+    
+    ```tsx
+    // resources/weather-display/widget.tsx
+    import { useWidget } from "mcp-use/react";
+    
+    export default function WeatherDisplay() {
+      const { props } = useWidget<{
+        city: string;
+        temperature: number;
+        condition: string;
+      }>();
+      
+      return (
+        <div className="weather-card">
+          <h2>{props.city}</h2>
+          <div className="temp">{props.temperature}°</div>
+          <p>{props.condition}</p>
+        </div>
+      );
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cross-Platform Compatibility">
+    Widgets work seamlessly across different AI clients:
+    
+    - **ChatGPT**: Using Apps SDK protocol
+    - **Claude Desktop**: Using MCP Apps Extension
+    - **Other MCP clients**: Auto-adapts to capabilities
+    
+    ```typescript
+    server.tool({
+      name: "show_weather",
+      description: "Display weather widget",
+      schema: z.object({ city: z.string() }),
+      widget: "weather-display",  // Links to widget
+    }, async ({ city }) => {
+      return widget({
+        props: { city, temperature: 72, condition: "Sunny" },
+        message: `Weather for ${city}`,
+      });
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Rich Interactions">
+    Widgets can handle user interactions and call tools:
+    
+    ```tsx
+    export default function TaskManager() {
+      const { callTool } = useWidget();
+      
+      const addTask = async (title: string) => {
+        await callTool("create_task", { title });
+      };
+      
+      return (
+        <button onClick={() => addTask("New task")}>
+          Add Task
+        </button>
+      );
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Automatic Discovery">
+    Widgets in `resources/` directory are auto-discovered:
+    
+    ```
+    project/
+    ├── src/
+    │   └── server.ts
+    └── resources/
+        ├── weather-display/
+        │   └── widget.tsx
+        └── task-list/
+            └── widget.tsx
+    ```
+    
+    No manual registration needed!
+  </Accordion>
+</AccordionGroup>
+
+### When to Use MCP Apps
+
+Use MCP Apps when you need:
+
+- 📊 **Data visualization** (charts, graphs, dashboards)
+- 🎮 **Interactive forms** and user input
+- 📋 **Rich content display** (cards, lists, galleries)
+- 👩‍💻 **User-facing interfaces** embedded in chat
+- 🎨 **Custom styling** and branding
+
+### Example: MCP App with Widget
+
+<CodeGroup>
+
+```typescript server.ts
+import { MCPServer, widget } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "weather-app",
+  version: "1.0.0",
+});
+
+server.tool({
+  name: "show_weather",
+  description: "Display interactive weather widget",
+  schema: z.object({ city: z.string() }),
+  widget: "weather-display",  // Links to resources/weather-display/widget.tsx
+}, async ({ city }) => {
+  const weather = await fetchWeather(city);
+  
+  return widget({
+    props: {
+      city,
+      temperature: weather.temp,
+      condition: weather.condition,
+      icon: weather.icon,
+    },
+    message: `Weather in ${city}: ${weather.condition}, ${weather.temp}°F`,
+  });
+});
+
+await server.listen(3000);
+```
+
+```tsx resources/weather-display/widget.tsx
+import { useWidget, type WidgetMetadata } from "mcp-use/react";
+import { z } from "zod";
+
+const propSchema = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  condition: z.string(),
+  icon: z.string().optional(),
+});
+
+export const widgetMetadata: WidgetMetadata = {
+  description: "Display weather information",
+  props: propSchema,
+};
+
+export default function WeatherDisplay() {
+  const { props, theme, isPending } = useWidget<z.infer<typeof propSchema>>();
+  
+  if (isPending) return <div>Loading...</div>;
+  
+  return (
+    <div style={{
+      background: theme === "dark" ? "#1a1a2e" : "#f0f4ff",
+      borderRadius: 16,
+      padding: 24,
+    }}>
+      <h2>{props.city}</h2>
+      {props.icon && <img src={props.icon} alt="weather icon" />}
+      <div className="temp">{props.temperature}°F</div>
+      <p>{props.condition}</p>
+    </div>
+  );
+}
+```
+
+</CodeGroup>
+
+## Comparison Table
+
+| Feature | MCP Server | MCP App |
+|---------|------------|----------|
+| **UI Components** | ❌ No | ✅ Yes (React widgets) |
+| **Tool Exposure** | ✅ Yes | ✅ Yes |
+| **Resource Access** | ✅ Yes | ✅ Yes |
+| **Prompts** | ✅ Yes | ✅ Yes |
+| **Client Compatibility** | All MCP clients | ChatGPT, Claude, MCP Apps clients |
+| **Use Case** | Backend services, data access | Interactive UIs, visualizations |
+| **Development** | Simple, lightweight | Requires widget development |
+| **Auto Inspector** | ✅ Yes | ✅ Yes |
+
+## Choosing the Right Approach
+
+<Steps>
+  <Step title="Start with MCP Server">
+    Begin with a basic MCP Server if you:
+    - Need simple tool exposure
+    - Don't require UI components
+    - Want the simplest implementation
+  </Step>
+  
+  <Step title="Add Widgets Incrementally">
+    Upgrade to MCP App when you:
+    - Identify tools that benefit from visualization
+    - Want to improve user experience
+    - Need interactive components
+  </Step>
+  
+  <Step title="Mix Both Approaches">
+    In the same server, you can have:
+    - Some tools return plain text (server-style)
+    - Some tools return widgets (app-style)
+    
+    ```typescript
+    // Plain tool (no widget)
+    server.tool({
+      name: "calculate",
+      schema: z.object({ expr: z.string() }),
+    }, async ({ expr }) => {
+      return text(`Result: ${eval(expr)}`);
+    });
+    
+    // Widget-enabled tool
+    server.tool({
+      name: "show_chart",
+      schema: z.object({ data: z.array(z.number()) }),
+      widget: "chart-display",
+    }, async ({ data }) => {
+      return widget({ props: { data } });
+    });
+    ```
+  </Step>
+</Steps>
+
+## Development Workflow
+
+<Tabs>
+  <Tab title="MCP Server">
+    ```bash
+    # Create server
+    npx create-mcp-use-app my-server
+    
+    # Start development
+    cd my-server
+    npm run dev
+    
+    # Test in inspector
+    open http://localhost:3000/inspector
+    ```
+  </Tab>
+  
+  <Tab title="MCP App">
+    ```bash
+    # Create app with widgets
+    npx create-mcp-use-app my-app
+    # Select: "MCP App with widgets"
+    
+    # Start development with hot reload
+    cd my-app
+    npm run dev
+    
+    # Inspector auto-opens and reloads on changes
+    ```
+  </Tab>
+</Tabs>
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Build Your First Server" icon="server" href="/guides/building-your-first-server">
+    Step-by-step guide to creating an MCP Server
+  </Card>
+  <Card title="Build MCP Apps" icon="mobile" href="/guides/building-mcp-apps">
+    Learn to create interactive widgets for MCP Apps
+  </Card>
+  <Card title="Tools, Resources, Prompts" icon="toolbox" href="/concepts/tools-resources-prompts">
+    Deep dive into MCP primitives
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the mcp-use framework architecture
+  </Card>
+</CardGroup>

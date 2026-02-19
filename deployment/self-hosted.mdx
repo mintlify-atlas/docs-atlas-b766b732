@@ -1,0 +1,740 @@
+---
+title: 'Self-Hosted Deployment'
+description: 'Deploy MCP servers on your own infrastructure'
+icon: 'server'
+---
+
+## Overview
+
+Self-hosting your MCP servers gives you complete control over infrastructure, security, and data. This guide covers deploying mcp-use servers on various platforms and configurations.
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    Node.js 20.19.0+ (22 recommended)
+  </Card>
+  <Card title="Build Tools" icon="hammer">
+    npm, pnpm, or yarn package manager
+  </Card>
+  <Card title="Server" icon="server">
+    Linux/Unix server with SSH access
+  </Card>
+  <Card title="Domain" icon="globe">
+    Optional: Domain name for HTTPS
+  </Card>
+</CardGroup>
+
+## Building for Production
+
+<Steps>
+  <Step title="Build Your Project">
+    Build your MCP server for production:
+    
+    ```bash
+    # Using mcp-use CLI
+    npx mcp-use build
+    
+    # Or using npm scripts
+    npm run build
+    ```
+    
+    This creates optimized production files in `dist/`:
+    - Compiled JavaScript from TypeScript
+    - Bundled UI widgets
+    - Static assets
+    - Manifest file (`mcp-use.json`)
+  </Step>
+  
+  <Step title="Test Production Build">
+    Verify the production build works locally:
+    
+    ```bash
+    npx mcp-use start
+    # or
+    npm start
+    ```
+    
+    Test the MCP endpoint:
+    ```bash
+    curl http://localhost:3000/mcp
+    curl http://localhost:3000/healthz
+    ```
+  </Step>
+  
+  <Step title="Prepare Environment Configuration">
+    Create a production environment file:
+    
+    ```bash
+    # .env.production
+    NODE_ENV=production
+    PORT=3000
+    
+    # API Keys (tool-specific)
+    OPENAI_API_KEY=sk-...
+    
+    # OAuth (if using authentication)
+    WORKOS_CLIENT_ID=client_...
+    WORKOS_API_KEY=sk-...
+    ```
+  </Step>
+</Steps>
+
+## Deployment Methods
+
+### Method 1: Direct Node.js Deployment
+
+<Tabs>
+  <Tab title="systemd Service">
+    Create a systemd service for automatic startup and process management.
+    
+    **1. Create service file:**
+    
+    ```bash
+    sudo nano /etc/systemd/system/mcp-server.service
+    ```
+    
+    **2. Add service configuration:**
+    
+    ```ini
+    [Unit]
+    Description=MCP Server
+    After=network.target
+    
+    [Service]
+    Type=simple
+    User=mcp
+    WorkingDirectory=/opt/mcp-server
+    EnvironmentFile=/opt/mcp-server/.env.production
+    ExecStart=/usr/bin/node /opt/mcp-server/dist/index.js
+    Restart=always
+    RestartSec=10
+    StandardOutput=journal
+    StandardError=journal
+    SyslogIdentifier=mcp-server
+    
+    [Install]
+    WantedBy=multi-user.target
+    ```
+    
+    **3. Enable and start service:**
+    
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable mcp-server
+    sudo systemctl start mcp-server
+    
+    # Check status
+    sudo systemctl status mcp-server
+    
+    # View logs
+    sudo journalctl -u mcp-server -f
+    ```
+  </Tab>
+  
+  <Tab title="PM2 Process Manager">
+    PM2 provides process management, monitoring, and auto-restart capabilities.
+    
+    **1. Install PM2:**
+    
+    ```bash
+    npm install -g pm2
+    ```
+    
+    **2. Create ecosystem file:**
+    
+    ```javascript
+    // ecosystem.config.js
+    module.exports = {
+      apps: [{
+        name: 'mcp-server',
+        script: './dist/index.js',
+        env_production: {
+          NODE_ENV: 'production',
+          PORT: 3000
+        },
+        instances: 2,
+        exec_mode: 'cluster',
+        max_memory_restart: '500M',
+        error_file: './logs/err.log',
+        out_file: './logs/out.log',
+        log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+      }]
+    };
+    ```
+    
+    **3. Start with PM2:**
+    
+    ```bash
+    # Start application
+    pm2 start ecosystem.config.js --env production
+    
+    # Save PM2 configuration
+    pm2 save
+    
+    # Setup startup script
+    pm2 startup
+    
+    # Monitor
+    pm2 monit
+    
+    # View logs
+    pm2 logs mcp-server
+    ```
+  </Tab>
+  
+  <Tab title="Docker (See Docker Guide)">
+    For Docker deployments, see the [Docker Deployment Guide](/deployment/docker).
+  </Tab>
+</Tabs>
+
+### Method 2: Reverse Proxy Setup
+
+Use Nginx or Apache as a reverse proxy for SSL termination and load balancing.
+
+<Tabs>
+  <Tab title="Nginx">
+    **1. Install Nginx:**
+    
+    ```bash
+    sudo apt update
+    sudo apt install nginx
+    ```
+    
+    **2. Configure reverse proxy:**
+    
+    ```nginx
+    # /etc/nginx/sites-available/mcp-server
+    server {
+        listen 80;
+        server_name api.yourdomain.com;
+        
+        # Redirect to HTTPS
+        return 301 https://$server_name$request_uri;
+    }
+    
+    server {
+        listen 443 ssl http2;
+        server_name api.yourdomain.com;
+        
+        # SSL Configuration (use Let's Encrypt)
+        ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        
+        # MCP Server proxy
+        location / {
+            proxy_pass http://localhost:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # SSE support
+            proxy_buffering off;
+            proxy_read_timeout 86400s;
+        }
+        
+        # Health check endpoint
+        location /healthz {
+            proxy_pass http://localhost:3000/healthz;
+            access_log off;
+        }
+    }
+    ```
+    
+    **3. Enable site and reload:**
+    
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/mcp-server /etc/nginx/sites-enabled/
+    sudo nginx -t
+    sudo systemctl reload nginx
+    ```
+    
+    **4. SSL with Let's Encrypt:**
+    
+    ```bash
+    sudo apt install certbot python3-certbot-nginx
+    sudo certbot --nginx -d api.yourdomain.com
+    ```
+  </Tab>
+  
+  <Tab title="Apache">
+    **1. Install Apache and modules:**
+    
+    ```bash
+    sudo apt update
+    sudo apt install apache2
+    sudo a2enmod proxy proxy_http proxy_wstunnel ssl rewrite headers
+    ```
+    
+    **2. Configure virtual host:**
+    
+    ```apache
+    # /etc/apache2/sites-available/mcp-server.conf
+    <VirtualHost *:80>
+        ServerName api.yourdomain.com
+        Redirect permanent / https://api.yourdomain.com/
+    </VirtualHost>
+    
+    <VirtualHost *:443>
+        ServerName api.yourdomain.com
+        
+        SSLEngine on
+        SSLCertificateFile /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem
+        SSLCertificateKeyFile /etc/letsencrypt/live/api.yourdomain.com/privkey.pem
+        
+        ProxyPreserveHost On
+        ProxyPass / http://localhost:3000/
+        ProxyPassReverse / http://localhost:3000/
+        
+        # SSE support
+        ProxyPass /mcp http://localhost:3000/mcp upgrade=websocket
+        
+        # Security headers
+        Header always set X-Frame-Options "SAMEORIGIN"
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set X-XSS-Protection "1; mode=block"
+    </VirtualHost>
+    ```
+    
+    **3. Enable site:**
+    
+    ```bash
+    sudo a2ensite mcp-server
+    sudo apache2ctl configtest
+    sudo systemctl reload apache2
+    ```
+  </Tab>
+</Tabs>
+
+## Infrastructure Platforms
+
+### AWS EC2
+
+<Steps>
+  <Step title="Launch EC2 Instance">
+    ```bash
+    # Recommended: Ubuntu 22.04 LTS
+    # Instance type: t3.small or larger
+    # Storage: 10GB+ EBS volume
+    ```
+  </Step>
+  
+  <Step title="Configure Security Group">
+    Allow inbound traffic:
+    - SSH (22) from your IP
+    - HTTP (80) from anywhere
+    - HTTPS (443) from anywhere
+  </Step>
+  
+  <Step title="Deploy Application">
+    ```bash
+    # SSH into instance
+    ssh -i your-key.pem ubuntu@your-instance-ip
+    
+    # Install Node.js
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt install -y nodejs
+    
+    # Clone and build
+    git clone https://github.com/your-username/your-mcp-server.git
+    cd your-mcp-server
+    npm install
+    npm run build
+    
+    # Set up systemd service (see above)
+    ```
+  </Step>
+</Steps>
+
+### DigitalOcean Droplet
+
+<Steps>
+  <Step title="Create Droplet">
+    - Choose Ubuntu 22.04 LTS
+    - Basic plan: 1GB RAM ($6/month)
+    - Add SSH key
+  </Step>
+  
+  <Step title="Initial Setup">
+    ```bash
+    # Update system
+    sudo apt update && sudo apt upgrade -y
+    
+    # Install Node.js
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt install -y nodejs
+    
+    # Install build tools
+    sudo apt install -y build-essential
+    ```
+  </Step>
+  
+  <Step title="Deploy with App Platform">
+    Alternatively, use DigitalOcean App Platform for managed deployment:
+    
+    1. Connect GitHub repository
+    2. Configure build command: `npm run build`
+    3. Configure run command: `npm start`
+    4. Set environment variables in dashboard
+  </Step>
+</Steps>
+
+### Google Cloud Platform
+
+<Steps>
+  <Step title="Create VM Instance">
+    ```bash
+    gcloud compute instances create mcp-server \
+      --image-family=ubuntu-2204-lts \
+      --image-project=ubuntu-os-cloud \
+      --machine-type=e2-small \
+      --zone=us-central1-a
+    ```
+  </Step>
+  
+  <Step title="Configure Firewall">
+    ```bash
+    gcloud compute firewall-rules create allow-mcp-http \
+      --allow tcp:80,tcp:443 \
+      --target-tags=mcp-server
+    ```
+  </Step>
+  
+  <Step title="Deploy Application">
+    Follow standard deployment steps with systemd or PM2.
+  </Step>
+</Steps>
+
+### Hetzner Cloud
+
+Cost-effective European hosting:
+
+```bash
+# CX11: 2GB RAM, 20GB SSD, €4.15/month
+# Excellent for MCP servers with moderate traffic
+```
+
+## Environment Variables Management
+
+### Using .env Files
+
+```bash
+# .env.production
+NODE_ENV=production
+PORT=3000
+MCP_SERVER_URL=https://api.yourdomain.com/mcp
+
+# API Keys
+OPENAI_API_KEY=sk-...
+
+# OAuth Configuration
+WORKOS_CLIENT_ID=client_...
+WORKOS_API_KEY=sk-...
+WORKOS_SUBDOMAIN=your-subdomain
+
+# Database (if needed)
+DATABASE_URL=postgresql://...
+
+# Observability
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+<Warning>
+  Never commit `.env.production` to version control. Use `.gitignore` to exclude it.
+</Warning>
+
+### Using Secret Management
+
+<Tabs>
+  <Tab title="AWS Secrets Manager">
+    ```bash
+    # Store secret
+    aws secretsmanager create-secret \
+      --name mcp-server/openai \
+      --secret-string "sk-..."
+    
+    # Retrieve in application
+    aws secretsmanager get-secret-value \
+      --secret-id mcp-server/openai \
+      --query SecretString \
+      --output text
+    ```
+  </Tab>
+  
+  <Tab title="Vault by HashiCorp">
+    ```bash
+    # Write secret
+    vault kv put secret/mcp-server \
+      openai_key="sk-..." \
+      workos_key="sk-..."
+    
+    # Read secret
+    vault kv get -field=openai_key secret/mcp-server
+    ```
+  </Tab>
+  
+  <Tab title="Environment Files">
+    ```bash
+    # Secure file permissions
+    chmod 600 .env.production
+    chown mcp:mcp .env.production
+    
+    # Load in systemd
+    EnvironmentFile=/opt/mcp-server/.env.production
+    ```
+  </Tab>
+</Tabs>
+
+## Monitoring and Logging
+
+### Application Logs
+
+<Tabs>
+  <Tab title="systemd journalctl">
+    ```bash
+    # View real-time logs
+    sudo journalctl -u mcp-server -f
+    
+    # View recent logs
+    sudo journalctl -u mcp-server -n 100
+    
+    # Filter by time
+    sudo journalctl -u mcp-server --since "1 hour ago"
+    
+    # Search logs
+    sudo journalctl -u mcp-server | grep ERROR
+    ```
+  </Tab>
+  
+  <Tab title="PM2 Logs">
+    ```bash
+    # View all logs
+    pm2 logs mcp-server
+    
+    # Error logs only
+    pm2 logs mcp-server --err
+    
+    # Clear logs
+    pm2 flush
+    
+    # Log rotation
+    pm2 install pm2-logrotate
+    pm2 set pm2-logrotate:max_size 10M
+    ```
+  </Tab>
+  
+  <Tab title="Winston Logger">
+    ```typescript
+    import winston from 'winston';
+    
+    const logger = winston.createLogger({
+      level: 'info',
+      format: winston.format.json(),
+      transports: [
+        new winston.transports.File({ 
+          filename: 'error.log', 
+          level: 'error' 
+        }),
+        new winston.transports.File({ 
+          filename: 'combined.log' 
+        })
+      ]
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Health Monitoring
+
+```bash
+# Create health check script
+cat > /opt/mcp-server/healthcheck.sh << 'EOF'
+#!/bin/bash
+RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthz)
+if [ $RESPONSE -eq 200 ]; then
+    exit 0
+else
+    exit 1
+fi
+EOF
+
+chmod +x /opt/mcp-server/healthcheck.sh
+
+# Add to crontab for monitoring
+crontab -e
+# Add: */5 * * * * /opt/mcp-server/healthcheck.sh || systemctl restart mcp-server
+```
+
+## Security Hardening
+
+### Firewall Configuration
+
+```bash
+# UFW (Ubuntu)
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+sudo ufw enable
+
+# Check status
+sudo ufw status verbose
+```
+
+### Automatic Security Updates
+
+```bash
+# Enable unattended upgrades
+sudo apt install unattended-upgrades
+sudo dpkg-reconfigure --priority=low unattended-upgrades
+```
+
+### Fail2Ban
+
+```bash
+# Install and configure
+sudo apt install fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+## Backup and Recovery
+
+### Application Backup
+
+```bash
+#!/bin/bash
+# backup.sh
+BACKUP_DIR="/backups/mcp-server"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p $BACKUP_DIR
+
+# Backup application
+tar -czf $BACKUP_DIR/app_$DATE.tar.gz /opt/mcp-server
+
+# Backup environment
+cp /opt/mcp-server/.env.production $BACKUP_DIR/env_$DATE
+
+# Cleanup old backups (keep last 7 days)
+find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+```
+
+### Database Backup (if applicable)
+
+```bash
+# PostgreSQL backup
+pg_dump -U postgres mcp_db > /backups/mcp_db_$(date +%Y%m%d).sql
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server Won't Start">
+    **Check logs:**
+    ```bash
+    sudo journalctl -u mcp-server -n 50
+    ```
+    
+    **Common issues:**
+    - Port already in use: `sudo lsof -i :3000`
+    - Missing environment variables
+    - Incorrect file permissions
+    - Missing dependencies
+  </Accordion>
+  
+  <Accordion title="High Memory Usage">
+    **Monitor memory:**
+    ```bash
+    pm2 monit
+    # or
+    htop
+    ```
+    
+    **Solutions:**
+    - Increase swap space
+    - Add PM2 memory limit: `max_memory_restart: '500M'`
+    - Optimize application code
+    - Scale horizontally
+  </Accordion>
+  
+  <Accordion title="SSL Certificate Issues">
+    **Renew Let's Encrypt:**
+    ```bash
+    sudo certbot renew --dry-run
+    sudo certbot renew
+    ```
+    
+    **Check certificate:**
+    ```bash
+    sudo certbot certificates
+    openssl s_client -connect api.yourdomain.com:443
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Optimization
+
+### Load Balancing
+
+```nginx
+# nginx load balancer
+upstream mcp_backend {
+    least_conn;
+    server localhost:3000;
+    server localhost:3001;
+    server localhost:3002;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.yourdomain.com;
+    
+    location / {
+        proxy_pass http://mcp_backend;
+    }
+}
+```
+
+### Caching
+
+```nginx
+# nginx caching
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=mcp_cache:10m max_size=1g;
+
+location /static/ {
+    proxy_cache mcp_cache;
+    proxy_cache_valid 200 1d;
+    add_header X-Cache-Status $upstream_cache_status;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Containerize your MCP server
+  </Card>
+  <Card title="Integrate with Claude" icon="brain" href="/deployment/claude">
+    Connect to Claude Desktop
+  </Card>
+  <Card title="Integrate with ChatGPT" icon="message" href="/deployment/chatgpt">
+    Use with ChatGPT
+  </Card>
+  <Card title="Monitoring Setup" icon="chart-line" href="/deployment/overview#monitoring-and-observability">
+    Advanced monitoring
+  </Card>
+</CardGroup>

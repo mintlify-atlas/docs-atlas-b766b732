@@ -1,0 +1,848 @@
+---
+title: 'Custom MCP Client Integration'
+description: 'Build custom clients to integrate with MCP servers'
+icon: 'plug'
+---
+
+## Overview
+
+The Model Context Protocol enables you to build custom clients that connect to any MCP server. Whether you're building a web application, mobile app, or backend service, mcp-use provides comprehensive client libraries for seamless integration.
+
+## Client Libraries
+
+<CardGroup cols={2}>
+  <Card title="TypeScript/JavaScript" icon="js">
+    Full-featured client for Node.js and browsers
+  </Card>
+  <Card title="Python" icon="python">
+    Python SDK for server-side applications
+  </Card>
+  <Card title="React Hooks" icon="react">
+    React hooks for browser-based clients
+  </Card>
+  <Card title="HTTP API" icon="globe">
+    Direct HTTP/SSE integration for any language
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Tabs>
+  <Tab title="TypeScript/JavaScript">
+    ```bash
+    npm install mcp-use
+    # or
+    pnpm add mcp-use
+    # or
+    yarn add mcp-use
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```bash
+    pip install mcp-use
+    ```
+  </Tab>
+  
+  <Tab title="React">
+    ```bash
+    npm install mcp-use react react-dom
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Client Usage
+
+### TypeScript/JavaScript Client
+
+<Steps>
+  <Step title="Create Client Instance">
+    ```typescript
+    import { MCPClient } from "mcp-use";
+    
+    // Configure MCP servers
+    const client = new MCPClient({
+      mcpServers: {
+        "my-server": {
+          url: "https://your-server.run.mcp-use.com/mcp"
+        }
+      }
+    });
+    ```
+  </Step>
+  
+  <Step title="Connect to Servers">
+    ```typescript
+    // Create sessions for all configured servers
+    await client.createAllSessions();
+    
+    // Or create specific session
+    await client.createSession("my-server");
+    ```
+  </Step>
+  
+  <Step title="Call Tools">
+    ```typescript
+    // Get session
+    const session = client.getSession("my-server");
+    
+    // List available tools
+    const tools = await session.listTools();
+    console.log("Available tools:", tools);
+    
+    // Call a tool
+    const result = await session.callTool("get_weather", {
+      city: "Tokyo"
+    });
+    
+    console.log("Result:", result.content[0].text);
+    ```
+  </Step>
+  
+  <Step title="Cleanup">
+    ```typescript
+    // Close all sessions when done
+    await client.closeAllSessions();
+    ```
+  </Step>
+</Steps>
+
+### Python Client
+
+```python
+import asyncio
+from mcp_use import MCPClient
+
+async def main():
+    # Configure client
+    config = {
+        "mcpServers": {
+            "my-server": {
+                "url": "https://your-server.run.mcp-use.com/mcp"
+            }
+        }
+    }
+    
+    # Create client
+    client = MCPClient.from_dict(config)
+    
+    # Create sessions
+    await client.create_all_sessions()
+    
+    # Get session and call tool
+    session = client.get_session("my-server")
+    result = await session.call_tool(
+        name="get_weather",
+        arguments={"city": "Tokyo"}
+    )
+    
+    print("Result:", result.content[0].text)
+    
+    # Cleanup
+    await client.close_all_sessions()
+
+asyncio.run(main())
+```
+
+## Configuration Options
+
+### HTTP/SSE Connection
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "remote-server": {
+      url: "https://your-server.run.mcp-use.com/mcp",
+      headers: {
+        "Authorization": "Bearer YOUR_TOKEN"
+      },
+      transport: "http",  // or "sse"
+      preferSse: true,     // Prefer SSE when available
+    }
+  }
+});
+```
+
+### STDIO Connection (Node.js only)
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "local-server": {
+      command: "node",
+      args: ["./dist/index.js"],
+      env: {
+        NODE_ENV: "development"
+      }
+    }
+  }
+});
+```
+
+### Multiple Servers
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "weather": {
+      url: "https://weather.run.mcp-use.com/mcp"
+    },
+    "database": {
+      url: "https://db.run.mcp-use.com/mcp",
+      headers: {
+        "X-API-Key": process.env.DB_API_KEY
+      }
+    },
+    "filesystem": {
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "./data"]
+    }
+  }
+});
+```
+
+## Working with Tools
+
+### List Available Tools
+
+```typescript
+const session = client.getSession("my-server");
+const tools = await session.listTools();
+
+tools.tools.forEach(tool => {
+  console.log(`Tool: ${tool.name}`);
+  console.log(`Description: ${tool.description}`);
+  console.log(`Schema:`, tool.inputSchema);
+});
+```
+
+### Call Tools
+
+```typescript
+// Simple tool call
+const result = await session.callTool("search_web", {
+  query: "MCP protocol"
+});
+
+// Handle different result types
+if (result.content[0].type === "text") {
+  console.log(result.content[0].text);
+} else if (result.content[0].type === "image") {
+  console.log("Image URL:", result.content[0].data);
+} else if (result.content[0].type === "resource") {
+  console.log("Resource:", result.content[0].resource);
+}
+```
+
+### Error Handling
+
+```typescript
+try {
+  const result = await session.callTool("get_weather", {
+    city: "Invalid"
+  });
+  console.log(result);
+} catch (error) {
+  if (error.code === "TOOL_NOT_FOUND") {
+    console.error("Tool does not exist");
+  } else if (error.code === "INVALID_PARAMS") {
+    console.error("Invalid parameters:", error.message);
+  } else {
+    console.error("Unexpected error:", error);
+  }
+}
+```
+
+## Working with Resources
+
+### List Resources
+
+```typescript
+const resources = await session.listResources();
+
+resources.resources.forEach(resource => {
+  console.log(`Resource: ${resource.name}`);
+  console.log(`URI: ${resource.uri}`);
+  console.log(`Type: ${resource.mimeType}`);
+});
+```
+
+### Read Resources
+
+```typescript
+// Read a specific resource
+const content = await session.readResource("docs://api/reference");
+
+console.log("Content type:", content.contents[0].mimeType);
+console.log("Content:", content.contents[0].text);
+
+// Read with template variables
+const userDoc = await session.readResource(
+  "docs://user/{userId}",
+  { userId: "123" }
+);
+```
+
+### Subscribe to Resource Updates
+
+```typescript
+// Subscribe to resource changes
+await session.subscribe("data://metrics/live");
+
+// Listen for updates
+session.on("resources/updated", (notification) => {
+  console.log("Resource updated:", notification.params.uri);
+  // Refresh resource
+});
+
+// Unsubscribe when done
+await session.unsubscribe("data://metrics/live");
+```
+
+## Working with Prompts
+
+### List Prompts
+
+```typescript
+const prompts = await session.listPrompts();
+
+prompts.prompts.forEach(prompt => {
+  console.log(`Prompt: ${prompt.name}`);
+  console.log(`Description: ${prompt.description}`);
+  console.log(`Arguments:`, prompt.arguments);
+});
+```
+
+### Get Prompt
+
+```typescript
+const prompt = await session.getPrompt("code_review", {
+  code: "function add(a, b) { return a + b; }",
+  language: "javascript"
+});
+
+console.log("Prompt messages:", prompt.messages);
+
+// Use with LLM
+const response = await llm.chat(prompt.messages);
+```
+
+## React Integration
+
+### Using React Hooks
+
+```tsx
+import { MCPProvider, useCallTool, useResources } from "mcp-use/react";
+import { MCPClient } from "mcp-use";
+
+// Create client
+const client = new MCPClient({
+  mcpServers: {
+    "my-server": {
+      url: "https://your-server.run.mcp-use.com/mcp"
+    }
+  }
+});
+
+// App wrapper
+function App() {
+  return (
+    <MCPProvider client={client}>
+      <WeatherWidget />
+    </MCPProvider>
+  );
+}
+
+// Component using MCP tools
+function WeatherWidget() {
+  const { callTool, isPending, error } = useCallTool("my-server");
+  const [weather, setWeather] = React.useState(null);
+  
+  const fetchWeather = async () => {
+    const result = await callTool("get_weather", { city: "Tokyo" });
+    setWeather(result.content[0].text);
+  };
+  
+  return (
+    <div>
+      <button onClick={fetchWeather} disabled={isPending}>
+        {isPending ? "Loading..." : "Get Weather"}
+      </button>
+      {error && <div>Error: {error.message}</div>}
+      {weather && <div>{weather}</div>}
+    </div>
+  );
+}
+```
+
+### Using Resources in React
+
+```tsx
+import { useResource } from "mcp-use/react";
+
+function DocumentViewer() {
+  const { data, isLoading, error, refresh } = useResource(
+    "my-server",
+    "docs://api/reference"
+  );
+  
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  
+  return (
+    <div>
+      <button onClick={refresh}>Refresh</button>
+      <pre>{data?.contents[0].text}</pre>
+    </div>
+  );
+}
+```
+
+## AI Agent Integration
+
+### Creating an AI Agent
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+import { MCPAgent, MCPClient } from "mcp-use";
+
+// Configure client with multiple servers
+const client = new MCPClient({
+  mcpServers: {
+    "weather": {
+      url: "https://weather.run.mcp-use.com/mcp"
+    },
+    "search": {
+      url: "https://search.run.mcp-use.com/mcp"
+    }
+  }
+});
+
+// Create LLM
+const llm = new ChatOpenAI({
+  modelName: "gpt-4o",
+  temperature: 0
+});
+
+// Create agent
+const agent = new MCPAgent({
+  llm,
+  client,
+  maxSteps: 20
+});
+
+// Run agent
+const result = await agent.run(
+  "What's the weather in Tokyo? Also search for the best sushi restaurants there."
+);
+
+console.log(result);
+```
+
+### Streaming Agent Responses
+
+```typescript
+// Stream intermediate steps
+for await (const step of agent.stream(query)) {
+  console.log(`Tool: ${step.action.tool}`);
+  console.log(`Input: ${JSON.stringify(step.action.toolInput)}`);
+  console.log(`Result: ${step.observation}`);
+}
+
+// Stream token-by-token
+for await (const event of agent.streamEvents(query)) {
+  if (event.event === "on_chat_model_stream") {
+    process.stdout.write(event.data?.chunk?.content || "");
+  }
+}
+```
+
+## Advanced Features
+
+### Sampling Requests
+
+Handle sampling requests from MCP servers:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "my-server": {
+      url: "https://your-server.run.mcp-use.com/mcp",
+      onSampling: async (params) => {
+        // Server requests LLM completion
+        const response = await llm.chat(params.messages);
+        return {
+          role: "assistant",
+          content: {
+            type: "text",
+            text: response.content
+          }
+        };
+      }
+    }
+  }
+});
+```
+
+### Handling Notifications
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "my-server": {
+      url: "https://your-server.run.mcp-use.com/mcp",
+      onNotification: async (notification) => {
+        if (notification.method === "notifications/progress") {
+          console.log("Progress:", notification.params);
+        } else if (notification.method === "notifications/resources/updated") {
+          console.log("Resource updated:", notification.params.uri);
+          // Refresh resource
+        }
+      }
+    }
+  }
+});
+```
+
+### Elicitation (User Input)
+
+Handle user input requests:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    "my-server": {
+      url: "https://your-server.run.mcp-use.com/mcp",
+      onElicitation: async (params) => {
+        // Prompt user for input
+        const userInput = await promptUser(params.message);
+        return {
+          form: params.form,
+          values: userInput
+        };
+      }
+    }
+  }
+});
+```
+
+## HTTP API Direct Integration
+
+For languages without native SDKs, use the HTTP API directly:
+
+### List Tools
+
+```bash
+curl -X POST https://your-server.run.mcp-use.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }'
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get weather for a city",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" }
+          },
+          "required": ["city"]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+### Call Tool
+
+```bash
+curl -X POST https://your-server.run.mcp-use.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "get_weather",
+      "arguments": {
+        "city": "Tokyo"
+      }
+    },
+    "id": 2
+  }'
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Temperature: 22°C, Condition: Sunny"
+      }
+    ]
+  },
+  "id": 2
+}
+```
+
+### Server-Sent Events (SSE)
+
+For streaming responses:
+
+```bash
+curl -N https://your-server.run.mcp-use.com/mcp \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "stream_data",
+      "arguments": {}
+    },
+    "id": 3
+  }'
+```
+
+## Example Applications
+
+### CLI Tool
+
+```typescript
+#!/usr/bin/env node
+import { MCPClient } from "mcp-use";
+import { Command } from "commander";
+
+const program = new Command();
+
+program
+  .name("mcp-cli")
+  .description("CLI tool for MCP servers")
+  .version("1.0.0");
+
+program
+  .command("call <server> <tool>")
+  .description("Call an MCP tool")
+  .option("-a, --args <json>", "Tool arguments as JSON")
+  .action(async (server, tool, options) => {
+    const client = new MCPClient({
+      mcpServers: {
+        [server]: {
+          url: process.env.MCP_SERVER_URL || "http://localhost:3000/mcp"
+        }
+      }
+    });
+    
+    await client.createSession(server);
+    const session = client.getSession(server);
+    
+    const args = options.args ? JSON.parse(options.args) : {};
+    const result = await session.callTool(tool, args);
+    
+    console.log(result.content[0].text);
+    await client.closeAllSessions();
+  });
+
+program.parse();
+```
+
+### Web Dashboard
+
+```typescript
+import express from "express";
+import { MCPClient } from "mcp-use";
+
+const app = express();
+const client = new MCPClient({
+  mcpServers: {
+    "production": {
+      url: process.env.MCP_SERVER_URL!
+    }
+  }
+});
+
+await client.createAllSessions();
+
+app.get("/api/tools", async (req, res) => {
+  const session = client.getSession("production");
+  const tools = await session.listTools();
+  res.json(tools);
+});
+
+app.post("/api/tools/:name", async (req, res) => {
+  const session = client.getSession("production");
+  const result = await session.callTool(req.params.name, req.body);
+  res.json(result);
+});
+
+app.listen(3000, () => {
+  console.log("Dashboard running on http://localhost:3000");
+});
+```
+
+### Mobile App (React Native)
+
+```typescript
+import { MCPClient } from "mcp-use";
+import { useState, useEffect } from "react";
+import { View, Text, Button } from "react-native";
+
+const client = new MCPClient({
+  mcpServers: {
+    "api": {
+      url: "https://your-server.run.mcp-use.com/mcp"
+    }
+  }
+});
+
+function App() {
+  const [weather, setWeather] = useState("");
+  
+  useEffect(() => {
+    client.createAllSessions();
+    return () => {
+      client.closeAllSessions();
+    };
+  }, []);
+  
+  const fetchWeather = async () => {
+    const session = client.getSession("api");
+    const result = await session.callTool("get_weather", {
+      city: "Tokyo"
+    });
+    setWeather(result.content[0].text);
+  };
+  
+  return (
+    <View>
+      <Button title="Get Weather" onPress={fetchWeather} />
+      <Text>{weather}</Text>
+    </View>
+  );
+}
+```
+
+## Best Practices
+
+<Check>
+  **Always close sessions** when done to free resources
+</Check>
+
+<Check>
+  **Handle errors gracefully** with try-catch blocks
+</Check>
+
+<Check>
+  **Use environment variables** for server URLs and credentials
+</Check>
+
+<Check>
+  **Implement retry logic** for network failures
+</Check>
+
+<Check>
+  **Cache tool lists** to reduce API calls
+</Check>
+
+<Check>
+  **Use TypeScript** for better type safety
+</Check>
+
+<Check>
+  **Test thoroughly** before production deployment
+</Check>
+
+<Check>
+  **Monitor performance** and implement timeouts
+</Check>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection Errors">
+    ```typescript
+    // Add timeout and retry logic
+    const client = new MCPClient({
+      mcpServers: {
+        "my-server": {
+          url: "https://your-server.run.mcp-use.com/mcp",
+          fetch: async (url, options) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            
+            try {
+              return await fetch(url, {
+                ...options,
+                signal: controller.signal
+              });
+            } finally {
+              clearTimeout(timeout);
+            }
+          }
+        }
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Authentication Issues">
+    ```typescript
+    // Implement token refresh
+    let authToken = await getAuthToken();
+    
+    const client = new MCPClient({
+      mcpServers: {
+        "my-server": {
+          url: "https://your-server.run.mcp-use.com/mcp",
+          headers: {
+            "Authorization": `Bearer ${authToken}`
+          },
+          fetch: async (url, options) => {
+            let response = await fetch(url, options);
+            
+            if (response.status === 401) {
+              // Refresh token and retry
+              authToken = await refreshAuthToken();
+              options.headers["Authorization"] = `Bearer ${authToken}`;
+              response = await fetch(url, options);
+            }
+            
+            return response;
+          }
+        }
+      }
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build an AI Agent" icon="robot" href="/guides/agents">
+    Create intelligent agents with MCP
+  </Card>
+  <Card title="React Integration" icon="react" href="/guides/react">
+    Build React applications with MCP
+  </Card>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Implement secure authentication
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/client">
+    Complete API documentation
+  </Card>
+</CardGroup>

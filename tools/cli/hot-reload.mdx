@@ -1,0 +1,505 @@
+---
+title: 'Hot Reload (HMR)'
+description: 'Understanding how Hot Module Replacement works in mcp-use development'
+icon: 'fire'
+---
+
+# Hot Module Reload (HMR)
+
+The mcp-use CLI uses Hot Module Replacement (HMR) to provide instant updates during development without losing WebSocket connections or restarting your server.
+
+## What is HMR?
+
+Hot Module Replacement dynamically updates your running server code without a full process restart:
+
+<CardGroup cols={2}>
+  <Card title="✅ With HMR" icon="fire">
+    - Files change
+    - Module reloaded in-place
+    - **Connections preserved**
+    - State maintained
+    - Instant updates
+  </Card>
+  <Card title="❌ Without HMR" icon="rotate">
+    - Files change
+    - Process killed and restarted
+    - **Connections lost**
+    - State reset
+    - Slower updates
+  </Card>
+</CardGroup>
+
+## How It Works
+
+The HMR system uses three key components:
+
+### 1. File Watcher
+
+Monitors your source files for changes:
+
+```typescript
+// chokidar watches your files
+const watcher = chokidar.watch([
+  'src/**/*.ts',
+  'src/**/*.js',
+], {
+  ignoreInitial: true,
+});
+
+watcher.on('change', (filepath) => {
+  console.log(`File changed: ${filepath}`);
+  reloadModule(filepath);
+});
+```
+
+### 2. Dynamic Import
+
+Reloads modules with cache busting:
+
+```typescript
+// Invalidate Node.js module cache
+delete require.cache[modulePath];
+
+// Re-import the module
+const freshModule = await import(
+  `${modulePath}?timestamp=${Date.now()}`
+);
+```
+
+### 3. Registration Sync
+
+Copies tool/resource/prompt registrations to running server:
+
+```typescript
+// MCPServer.syncRegistrationsFrom() method
+server.syncRegistrationsFrom(freshModule.server);
+```
+
+This preserves the running server instance while updating its registrations.
+
+## What Gets Hot Reloaded?
+
+<Tabs>
+  <Tab title="Tools">
+    Tool definitions update instantly:
+
+    ```typescript src/index.ts
+    // Original
+    server.tool(
+      {
+        name: "get-weather",
+        schema: z.object({ city: z.string() }),
+      },
+      async ({ city }) => {
+        return text(`Weather in ${city}: Sunny`);
+      }
+    );
+    ```
+
+    **Save file → Tool immediately updated**
+
+    ```typescript src/index.ts
+    // Updated (HMR applied without restart)
+    server.tool(
+      {
+        name: "get-weather",
+        schema: z.object({
+          city: z.string(),
+          units: z.enum(["celsius", "fahrenheit"]),
+        }),
+      },
+      async ({ city, units }) => {
+        return text(`Weather in ${city}: 72°${units === 'celsius' ? 'C' : 'F'}`);
+      }
+    );
+    ```
+
+    Connected clients see the updated tool immediately.
+  </Tab>
+
+  <Tab title="Resources">
+    Resource definitions update in real-time:
+
+    ```typescript src/index.ts
+    // Original
+    server.resource(
+      { name: "config", uri: "config://app" },
+      async () => object({ theme: "light" })
+    );
+    ```
+
+    **Save file → Resource updated**
+
+    ```typescript src/index.ts
+    // Updated
+    server.resource(
+      { name: "config", uri: "config://app" },
+      async () => object({
+        theme: "dark",
+        language: "en",
+        fontSize: 14,
+      })
+    );
+    ```
+  </Tab>
+
+  <Tab title="Prompts">
+    Prompt templates update without restart:
+
+    ```typescript src/index.ts
+    // Original
+    server.prompt(
+      { name: "review", schema: z.object({ code: z.string() }) },
+      async ({ code }) => text(`Review: ${code}`)
+    );
+    ```
+
+    **Save file → Prompt updated**
+
+    ```typescript src/index.ts
+    // Updated with better template
+    server.prompt(
+      {
+        name: "review",
+        schema: z.object({
+          code: z.string(),
+          language: z.string(),
+        }),
+      },
+      async ({ code, language }) => text(`
+Please review this ${language} code:
+
+${code}
+
+Check for:
+- Best practices
+- Security issues
+- Performance problems
+      `)
+    );
+    ```
+  </Tab>
+
+  <Tab title="Widgets">
+    React widgets rebuild and reload:
+
+    ```tsx resources/hello.tsx
+    // Original
+    export default function Hello() {
+      return <div>Hello World</div>;
+    }
+    ```
+
+    **Save file → Widget rebuilds → Browser auto-refreshes**
+
+    ```tsx resources/hello.tsx
+    // Updated
+    export default function Hello() {
+      return (
+        <div className="p-4">
+          <h1 className="text-2xl font-bold">Hello World</h1>
+          <p>Welcome to MCP!</p>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## HMR in Action
+
+Watch HMR work in real-time:
+
+<Steps>
+  <Step title="Start Dev Server">
+    ```bash
+    mcp-use dev
+    ```
+
+    Server starts with HMR enabled:
+    ```
+    Server running on port 3000
+    Watching for changes...
+    ```
+  </Step>
+
+  <Step title="Connect Inspector">
+    Open inspector at `http://localhost:3000/inspector` and connect to your server.
+
+    WebSocket connection established.
+  </Step>
+
+  <Step title="Edit Tool">
+    Modify a tool in `src/index.ts`:
+
+    ```typescript
+    // Change tool description
+    server.tool(
+      {
+        name: "calculate",
+        description: "Advanced calculator", // <- Changed
+        schema: z.object({ expr: z.string() }),
+      },
+      async ({ expr }) => { /* ... */ }
+    );
+    ```
+
+    Save the file.
+  </Step>
+
+  <Step title="Watch HMR">
+    Terminal shows:
+    ```bash
+    File changed: src/index.ts
+    Reloading module...
+    ✅ Module reloaded in 45ms
+    ```
+
+    Inspector shows updated tool description **instantly** without reconnecting.
+  </Step>
+
+  <Step title="Test Tool">
+    Execute the tool in the inspector - it uses the new implementation immediately.
+
+    **No reconnection needed. No state lost.**
+  </Step>
+</Steps>
+
+## HMR Limitations
+
+Some changes require a full restart:
+
+<Warning>
+  **These changes require restarting the dev server:**
+
+  - Server configuration (port, host, etc.)
+  - Middleware additions
+  - HTTP route definitions
+  - External dependencies changed
+  - package.json modifications
+  - Environment variable changes
+</Warning>
+
+### Example: When HMR Can't Help
+
+```typescript src/index.ts
+// Changing server config requires restart
+const server = new MCPServer({
+  name: "my-server",
+  version: "1.0.0",
+  baseUrl: "http://localhost:4000", // <- Changed port
+});
+
+server.listen(4000); // <- Can't HMR this
+```
+
+**Solution:** Restart the dev server:
+```bash
+Ctrl+C
+mcp-use dev --port 4000
+```
+
+## Disabling HMR
+
+Sometimes you need a full restart for every change:
+
+```bash
+mcp-use dev --no-hmr
+```
+
+**Uses `tsx watch` instead:**
+- Process restarts on every file change
+- All connections are lost
+- Simpler behavior
+- Better for debugging startup issues
+
+### When to Disable HMR
+
+<AccordionGroup>
+  <Accordion title="Debugging Startup Code" icon="bug">
+    When you need to debug server initialization:
+
+    ```bash
+    mcp-use dev --no-hmr
+    ```
+
+    Every change triggers a full restart, making it easier to see initialization logs.
+  </Accordion>
+
+  <Accordion title="Testing Connection Logic" icon="plug">
+    When testing client connection handling:
+
+    ```bash
+    mcp-use dev --no-hmr
+    ```
+
+    Clients reconnect on every change, testing your reconnection logic.
+  </Accordion>
+
+  <Accordion title="HMR Issues" icon="triangle-exclamation">
+    If HMR behaves unexpectedly:
+
+    ```bash
+    mcp-use dev --no-hmr
+    ```
+
+    Fall back to reliable restart-based development.
+  </Accordion>
+</AccordionGroup>
+
+## Advanced HMR
+
+### Global Flag Prevention
+
+The CLI sets a global flag to prevent duplicate server starts:
+
+```typescript
+// CLI sets this before importing your module
+(globalThis as any).__mcpUseHmrMode = true;
+
+// Your code checks this:
+if (!(globalThis as any).__mcpUseHmrMode) {
+  server.listen(3000);
+}
+```
+
+This allows the CLI to import your module without starting the server.
+
+### Sync Implementation
+
+How `syncRegistrationsFrom()` works:
+
+```typescript
+class MCPServer {
+  syncRegistrationsFrom(otherServer: MCPServer) {
+    // Clear old registrations
+    this.tools.clear();
+    this.resources.clear();
+    this.prompts.clear();
+
+    // Copy new registrations
+    for (const [name, tool] of otherServer.tools) {
+      this.tools.set(name, tool);
+    }
+
+    for (const [name, resource] of otherServer.resources) {
+      this.resources.set(name, resource);
+    }
+
+    for (const [name, prompt] of otherServer.prompts) {
+      this.prompts.set(name, prompt);
+    }
+
+    console.log('Registrations synced');
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Changes Not Reflecting" icon="circle-xmark">
+    **Problem:** File saved but tool not updated.
+
+    **Solutions:**
+
+    1. Check terminal for errors:
+       ```bash
+       Error: Cannot find module './helper'
+       ```
+
+    2. Verify file is being watched:
+       ```bash
+       # Should see:
+       File changed: src/index.ts
+       ```
+
+    3. Try manual restart:
+       ```bash
+       Ctrl+C
+       mcp-use dev
+       ```
+  </Accordion>
+
+  <Accordion title="Module Cache Issues" icon="memory">
+    **Problem:** Old code still running after changes.
+
+    **Solutions:**
+
+    1. Disable HMR temporarily:
+       ```bash
+       mcp-use dev --no-hmr
+       ```
+
+    2. Clear Node.js cache:
+       ```bash
+       rm -rf node_modules/.cache
+       ```
+
+    3. Restart with clean slate:
+       ```bash
+       npm run dev
+       ```
+  </Accordion>
+
+  <Accordion title="WebSocket Disconnects" icon="wifi">
+    **Problem:** Inspector loses connection during HMR.
+
+    **This shouldn't happen with HMR!**
+
+    **Diagnostics:**
+
+    1. Check if HMR is actually enabled:
+       ```bash
+       # Should NOT see "Force killing" messages
+       ```
+
+    2. Look for errors in terminal:
+       ```bash
+       Error: Module reload failed
+       ```
+
+    3. Try without HMR to isolate issue:
+       ```bash
+       mcp-use dev --no-hmr
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance
+
+HMR is designed to be fast:
+
+<CardGroup cols={3}>
+  <Card title="File Change" icon="stopwatch">
+    Detection: **< 100ms**
+  </Card>
+  <Card title="Module Reload" icon="rotate">
+    Re-import: **< 200ms**
+  </Card>
+  <Card title="Sync" icon="arrows-rotate">
+    Registration: **< 50ms**
+  </Card>
+</CardGroup>
+
+**Total time:** Changes visible in **< 350ms** on average.
+
+Compare to full restart: **2-5 seconds** including:
+- Process termination
+- New process spawn
+- Module loading
+- TypeScript compilation
+- Widget building
+- Server startup
+- Client reconnection
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/tools/cli/commands">
+    Complete command reference
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/tools/cli/deployment">
+    Deploy to production
+  </Card>
+</CardGroup>

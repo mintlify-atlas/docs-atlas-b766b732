@@ -1,0 +1,407 @@
+---
+title: 'Creating a Server'
+description: 'Step-by-step guide to creating MCP servers'
+icon: 'plus'
+---
+
+# Creating an MCP Server
+
+This guide walks through creating a production-ready MCP server from scratch.
+
+## Setup
+
+### 1. Initialize Project
+
+```bash
+mkdir my-mcp-server
+cd my-mcp-server
+npm init -y
+npm install mcp-use zod
+npm install -D typescript tsx @types/node
+```
+
+### 2. Configure TypeScript
+
+Create `tsconfig.json`:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+### 3. Create Server File
+
+Create `src/server.ts`:
+
+```typescript src/server.ts
+import { MCPServer, text, object } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'my-mcp-server',
+  version: '1.0.0',
+  description: 'My first MCP server'
+});
+
+// Add your tools, resources, and prompts here
+
+await server.listen(3000);
+```
+
+## Adding Tools
+
+Tools are functions that AI models can call:
+
+```typescript
+server.tool(
+  {
+    name: 'calculate',
+    description: 'Perform basic math operations',
+    schema: z.object({
+      operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+      a: z.number(),
+      b: z.number()
+    })
+  },
+  async ({ operation, a, b }) => {
+    let result: number;
+    
+    switch (operation) {
+      case 'add':
+        result = a + b;
+        break;
+      case 'subtract':
+        result = a - b;
+        break;
+      case 'multiply':
+        result = a * b;
+        break;
+      case 'divide':
+        if (b === 0) return error('Division by zero');
+        result = a / b;
+        break;
+    }
+    
+    return object({ result, operation, inputs: { a, b } });
+  }
+);
+```
+
+## Adding Resources
+
+Resources provide data that models can read:
+
+```typescript
+server.resource(
+  {
+    name: 'stats',
+    uri: 'app://stats',
+    title: 'Server Statistics',
+    description: 'Current server statistics'
+  },
+  async () => {
+    return object({
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      timestamp: new Date().toISOString()
+    });
+  }
+);
+```
+
+### Dynamic Resources (Templates)
+
+Use templates for parameterized resources:
+
+```typescript
+server.resourceTemplate(
+  {
+    name: 'user-profile',
+    uriTemplate: 'app://users/{userId}/profile',
+    title: 'User Profile',
+    mimeType: 'application/json'
+  },
+  async (uri, params) => {
+    const { userId } = params;
+    
+    // Fetch user data
+    const user = await database.getUser(userId);
+    
+    if (!user) {
+      return error(`User ${userId} not found`);
+    }
+    
+    return object(user);
+  }
+);
+```
+
+## Adding Prompts
+
+Prompts are reusable templates:
+
+```typescript
+server.prompt(
+  {
+    name: 'code-review',
+    description: 'Generate code review prompt',
+    schema: z.object({
+      language: z.string(),
+      code: z.string()
+    })
+  },
+  async ({ language, code }) => {
+    return text(`
+Please review this ${language} code:
+
+\`\`\`${language}
+${code}
+\`\`\`
+
+Provide feedback on:
+1. Code quality
+2. Potential bugs
+3. Performance issues
+4. Best practices
+    `);
+  }
+);
+```
+
+## Environment Variables
+
+Use environment variables for configuration:
+
+```typescript
+import 'dotenv/config';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+server.tool(
+  {
+    name: 'api-call',
+    description: 'Call external API'
+  },
+  async () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      return error('API_KEY not configured');
+    }
+    
+    // Use apiKey...
+  }
+);
+```
+
+Create `.env`:
+
+```bash .env
+API_KEY=your-api-key
+PORT=3000
+```
+
+## Error Handling
+
+Handle errors gracefully:
+
+```typescript
+server.tool(
+  {
+    name: 'risky-operation',
+    description: 'Operation that might fail'
+  },
+  async (params) => {
+    try {
+      // Risky operation
+      const result = await performRiskyOperation(params);
+      return object({ success: true, result });
+    } catch (err) {
+      // Return structured error
+      return error(`Operation failed: ${err.message}`);
+    }
+  }
+);
+```
+
+## Validation
+
+Use Zod for input validation:
+
+```typescript
+server.tool(
+  {
+    name: 'create-user',
+    schema: z.object({
+      email: z.string().email(),
+      age: z.number().int().min(18).max(120),
+      name: z.string().min(1).max(100),
+      role: z.enum(['user', 'admin', 'moderator']).optional().default('user')
+    })
+  },
+  async ({ email, age, name, role }) => {
+    // Input is automatically validated
+    const user = await createUser({ email, age, name, role });
+    return object(user);
+  }
+);
+```
+
+## Custom HTTP Endpoints
+
+Add custom routes:
+
+```typescript
+// Health check endpoint
+server.app.get('/health', (c) => {
+  return c.json({ 
+    status: 'ok', 
+    uptime: process.uptime() 
+  });
+});
+
+// Webhook endpoint
+server.app.post('/webhook', async (c) => {
+  const body = await c.req.json();
+  
+  // Process webhook
+  await handleWebhook(body);
+  
+  return c.json({ received: true });
+});
+
+// Serve static files
+server.app.get('/docs/*', async (c) => {
+  return c.html(await readFile('./docs/index.html'));
+});
+```
+
+## Development Mode
+
+Use tsx for hot reload:
+
+```bash
+npx tsx watch src/server.ts
+```
+
+Update `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  }
+}
+```
+
+## Production Build
+
+### Build the Server
+
+```bash
+npm run build
+```
+
+### Run in Production
+
+```bash
+NODE_ENV=production npm start
+```
+
+### Production Checklist
+
+- [ ] Enable CORS for allowed origins only
+- [ ] Add rate limiting
+- [ ] Configure proper logging
+- [ ] Set up monitoring
+- [ ] Use environment variables for secrets
+- [ ] Enable HTTPS
+- [ ] Add health check endpoints
+- [ ] Configure session storage (Redis)
+- [ ] Set up error tracking
+
+## Testing
+
+### Manual Testing
+
+1. Start your server
+2. Open the Inspector UI at `http://localhost:3000`
+3. Test tools, resources, and prompts
+
+### Automated Testing
+
+Create tests with the MCP client:
+
+```typescript test/server.test.ts
+import { MCPClient } from 'mcp-use/client';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
+describe('MCP Server', () => {
+  let client: MCPClient;
+  let session: any;
+  
+  beforeAll(async () => {
+    client = new MCPClient({
+      mcpServers: {
+        'test-server': {
+          url: 'http://localhost:3000/mcp'
+        }
+      }
+    });
+    
+    session = await client.createSession('test-server');
+  });
+  
+  afterAll(async () => {
+    await client.close();
+  });
+  
+  it('should call calculate tool', async () => {
+    const result = await session.callTool('calculate', {
+      operation: 'add',
+      a: 5,
+      b: 3
+    });
+    
+    expect(result.structuredContent.result).toBe(8);
+  });
+  
+  it('should read stats resource', async () => {
+    const stats = await session.readResource('app://stats');
+    
+    expect(stats.contents[0].text).toBeDefined();
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Tools Guide" icon="wrench" href="/typescript/server/tools">
+    Learn to build powerful tools
+  </Card>
+  <Card title="Resources Guide" icon="database" href="/typescript/server/resources">
+    Serve data effectively
+  </Card>
+  <Card title="OAuth Setup" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/typescript/server/deployment">
+    Deploy to production
+  </Card>
+</CardGroup>

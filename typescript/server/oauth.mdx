@@ -1,0 +1,600 @@
+---
+title: 'OAuth'
+description: 'Add authentication to your MCP server'
+icon: 'lock'
+---
+
+# OAuth Authentication
+
+Secure your MCP server with OAuth 2.0 authentication. mcp-use provides zero-config OAuth integration with popular identity providers.
+
+## Supported Providers
+
+- **Auth0** - Enterprise authentication platform
+- **WorkOS** - SSO and user management for B2B apps
+- **Supabase** - Open-source Firebase alternative
+- **Keycloak** - Open-source identity management
+- **Custom** - Bring your own OAuth provider
+
+## Quick Start
+
+### Auth0
+
+Zero-config setup with environment variables:
+
+```bash
+# .env
+MCP_USE_OAUTH_AUTH0_DOMAIN=your-tenant.auth0.com
+MCP_USE_OAUTH_AUTH0_AUDIENCE=https://your-api.com
+```
+
+```typescript
+import { MCPServer, oauthAuth0Provider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider() // Auto-configured from env vars
+});
+
+server.tool(
+  {
+    name: 'get-user',
+    description: 'Get authenticated user info'
+  },
+  async (params, ctx) => {
+    return {
+      userId: ctx.auth.user.userId,
+      email: ctx.auth.user.email,
+      name: ctx.auth.user.name
+    };
+  }
+);
+
+await server.listen();
+```
+
+### WorkOS
+
+WorkOS supports two OAuth modes:
+
+**Dynamic Client Registration (Recommended)**
+
+```bash
+# .env
+MCP_USE_OAUTH_WORKOS_SUBDOMAIN=your-company
+MCP_USE_OAUTH_WORKOS_API_KEY=sk_xxx  # For API calls
+```
+
+```typescript
+import { oauthWorkOSProvider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthWorkOSProvider() // DCR mode
+});
+```
+
+**Pre-registered OAuth Client**
+
+```bash
+# .env
+MCP_USE_OAUTH_WORKOS_SUBDOMAIN=your-company
+MCP_USE_OAUTH_WORKOS_CLIENT_ID=client_01KB5...
+MCP_USE_OAUTH_WORKOS_API_KEY=sk_xxx
+```
+
+### Supabase
+
+```bash
+# .env
+MCP_USE_OAUTH_SUPABASE_PROJECT_ID=your-project-id
+MCP_USE_OAUTH_SUPABASE_JWT_SECRET=your-jwt-secret
+```
+
+```typescript
+import { oauthSupabaseProvider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthSupabaseProvider()
+});
+```
+
+### Keycloak
+
+```bash
+# .env
+MCP_USE_OAUTH_KEYCLOAK_SERVER_URL=https://keycloak.example.com
+MCP_USE_OAUTH_KEYCLOAK_REALM=my-realm
+MCP_USE_OAUTH_KEYCLOAK_CLIENT_ID=my-client
+```
+
+```typescript
+import { oauthKeycloakProvider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthKeycloakProvider()
+});
+```
+
+## Provider Configuration
+
+### Explicit Configuration
+
+Pass configuration directly instead of using environment variables:
+
+```typescript
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider({
+    domain: 'my-tenant.auth0.com',
+    audience: 'https://my-api.com'
+  })
+});
+```
+
+### Custom Provider
+
+Integrate any OAuth 2.0 provider:
+
+```typescript
+import { oauthCustomProvider } from 'mcp-use/server';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthCustomProvider({
+    issuer: 'https://oauth.example.com',
+    jwksUrl: 'https://oauth.example.com/.well-known/jwks.json',
+    authEndpoint: 'https://oauth.example.com/authorize',
+    tokenEndpoint: 'https://oauth.example.com/token',
+    scopesSupported: ['openid', 'profile', 'email'],
+    grantTypesSupported: ['authorization_code'],
+    
+    // Custom token verification
+    verifyToken: async (token) => {
+      const JWKS = createRemoteJWKSet(
+        new URL('https://oauth.example.com/.well-known/jwks.json')
+      );
+      
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: 'https://oauth.example.com',
+        audience: 'my-api'
+      });
+      
+      return { payload };
+    },
+    
+    // Custom user info extraction
+    getUserInfo: (payload) => ({
+      userId: payload.sub as string,
+      email: payload.email as string,
+      name: payload.name as string
+    })
+  })
+});
+```
+
+## Accessing User Info
+
+Authenticated user information is available in the tool context:
+
+```typescript
+server.tool(
+  {
+    name: 'get-profile',
+    description: 'Get user profile'
+  },
+  async (params, ctx) => {
+    // User information from JWT
+    const {
+      userId,      // Unique user ID
+      email,       // Email address
+      name,        // Full name
+      username,    // Username
+      nickname,    // Display name
+      picture,     // Avatar URL
+      roles,       // User roles
+      permissions  // User permissions
+    } = ctx.auth.user;
+    
+    // Access token for API calls
+    const token = ctx.auth.accessToken;
+    
+    // OAuth scopes
+    const scopes = ctx.auth.scopes;
+    
+    // JWT payload (all claims)
+    const payload = ctx.auth.payload;
+    
+    return {
+      userId,
+      email,
+      name
+    };
+  }
+);
+```
+
+## Authorization
+
+### Scope-Based Access
+
+Check if user has required scopes:
+
+```typescript
+import { hasScope, requireScope } from 'mcp-use/server';
+
+server.tool(
+  {
+    name: 'admin-action',
+    description: 'Perform admin action'
+  },
+  async (params, ctx) => {
+    // Check if user has scope
+    if (!hasScope(ctx, 'admin')) {
+      return { error: 'Admin access required' };
+    }
+    
+    // Or throw error if missing
+    requireScope(ctx, 'admin'); // Throws if missing
+    
+    // Check multiple scopes (requires ALL)
+    requireScope(ctx, ['admin', 'write']);
+    
+    // Perform admin action
+    return { success: true };
+  }
+);
+```
+
+### Permission-Based Access
+
+Check user permissions (Auth0 style):
+
+```typescript
+import { requireAnyScope } from 'mcp-use/server';
+
+server.tool(
+  {
+    name: 'manage-users',
+    description: 'Manage users'
+  },
+  async (params, ctx) => {
+    // Require at least one of these scopes
+    requireAnyScope(ctx, ['admin', 'user:write']);
+    
+    // Check permissions array
+    const permissions = ctx.auth.permissions;
+    if (!permissions.includes('users:write')) {
+      return { error: 'Permission denied' };
+    }
+    
+    return { success: true };
+  }
+);
+```
+
+### Role-Based Access
+
+Check user roles:
+
+```typescript
+server.tool(
+  {
+    name: 'delete-data',
+    description: 'Delete data'
+  },
+  async (params, ctx) => {
+    const roles = ctx.auth.user.roles || [];
+    
+    if (!roles.includes('admin')) {
+      return { error: 'Admin role required' };
+    }
+    
+    return { success: true };
+  }
+);
+```
+
+## Making Authenticated API Calls
+
+Use the access token to call external APIs:
+
+```typescript
+server.tool(
+  {
+    name: 'fetch-user-data',
+    description: 'Fetch data from API'
+  },
+  async (params, ctx) => {
+    const token = ctx.auth.accessToken;
+    
+    const response = await fetch('https://api.example.com/user', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      return { error: `API error: ${response.statusText}` };
+    }
+    
+    const data = await response.json();
+    return data;
+  }
+);
+```
+
+## OAuth Endpoints
+
+When OAuth is enabled, these endpoints are automatically created:
+
+### Discovery Endpoint
+
+```
+GET /.well-known/oauth-protected-resource
+```
+
+Returns OAuth configuration:
+
+```json
+{
+  "resource": "https://your-server.com",
+  "authorization_servers": ["https://oauth-provider.com"],
+  "bearer_methods_supported": ["header"],
+  "resource_documentation": "https://your-server.com/docs"
+}
+```
+
+### Authorization Server Metadata
+
+```
+GET /.well-known/oauth-authorization-server
+```
+
+Returns provider configuration:
+
+```json
+{
+  "issuer": "https://oauth-provider.com",
+  "authorization_endpoint": "https://oauth-provider.com/authorize",
+  "token_endpoint": "https://oauth-provider.com/token",
+  "scopes_supported": ["openid", "profile", "email"],
+  "grant_types_supported": ["authorization_code"]
+}
+```
+
+## Protected Routes
+
+All `/mcp` endpoints are automatically protected with bearer authentication:
+
+```
+POST /mcp
+Authorization: Bearer <token>
+```
+
+If the token is missing or invalid, the server returns:
+
+```
+401 Unauthorized
+WWW-Authenticate: Bearer error="unauthorized", resource_metadata="https://your-server.com/.well-known/oauth-protected-resource"
+```
+
+## OAuth Modes
+
+### Proxy Mode (Default)
+
+MCP server proxies OAuth requests to the provider:
+
+```
+┌────────┐      ┌────────────┐      ┌──────────┐
+│ Client │ ───> │ MCP Server │ ───> │ Provider │
+└────────┘      └────────────┘      └──────────┘
+```
+
+Available routes:
+- `POST /authorize` - Start OAuth flow
+- `POST /token` - Exchange code for token
+- `GET /.well-known/*` - Discovery endpoints
+
+### Direct Mode (WorkOS)
+
+Clients communicate directly with the provider:
+
+```
+┌────────┐      ┌──────────┐
+│ Client │ ───> │ Provider │
+└────────┘      └──────────┘
+     │
+     └─────> ┌────────────┐
+             │ MCP Server │ (validates tokens)
+             └────────────┘
+```
+
+Only discovery endpoints are available:
+- `GET /.well-known/*` - Discovery endpoints
+
+## Advanced Configuration
+
+### Skip JWT Verification (Development Only)
+
+```typescript
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider({
+    domain: 'dev-tenant.auth0.com',
+    audience: 'https://dev-api.com',
+    verifyJwt: false // ONLY for development!
+  })
+});
+```
+
+<Warning>
+  Never disable JWT verification in production. This makes your server vulnerable to token forgery.
+</Warning>
+
+### Custom Bearer Middleware
+
+Create custom authentication middleware:
+
+```typescript
+import { createBearerAuthMiddleware } from 'mcp-use/server';
+
+const provider = oauthAuth0Provider();
+const middleware = createBearerAuthMiddleware(provider, 'https://my-server.com');
+
+// Apply to custom routes
+server.app.use('/api/*', middleware);
+```
+
+## Best Practices
+
+### 1. Environment Variables
+
+Store credentials securely:
+
+```bash
+# Good
+MCP_USE_OAUTH_AUTH0_DOMAIN=tenant.auth0.com
+MCP_USE_OAUTH_AUTH0_AUDIENCE=https://api.example.com
+
+# Bad - hardcoded in code
+```
+
+### 2. Validate User Input
+
+Always validate user IDs and permissions:
+
+```typescript
+server.tool(
+  {
+    name: 'get-user-data',
+    schema: z.object({
+      userId: z.string()
+    })
+  },
+  async ({ userId }, ctx) => {
+    // Ensure user can only access their own data
+    if (userId !== ctx.auth.user.userId) {
+      return { error: 'Access denied' };
+    }
+    
+    return await getUserData(userId);
+  }
+);
+```
+
+### 3. Scope Requirements
+
+Document required scopes in tool descriptions:
+
+```typescript
+server.tool(
+  {
+    name: 'admin-tool',
+    description: 'Admin-only tool (requires admin scope)'
+  },
+  async (params, ctx) => {
+    requireScope(ctx, 'admin');
+    // ...
+  }
+);
+```
+
+### 4. Error Handling
+
+Provide clear error messages:
+
+```typescript
+server.tool(
+  {
+    name: 'protected-action'
+  },
+  async (params, ctx) => {
+    if (!ctx.auth) {
+      return { error: 'Authentication required. Please sign in.' };
+    }
+    
+    if (!hasScope(ctx, 'write')) {
+      return { error: 'Insufficient permissions. Contact your administrator.' };
+    }
+    
+    // ...
+  }
+);
+```
+
+## Examples
+
+### Complete Auth0 Server
+
+See `examples/server/oauth/auth0/src/server.ts`:
+
+```typescript
+import { MCPServer, oauthAuth0Provider, error, object } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'auth0-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider()
+});
+
+server.tool(
+  {
+    name: 'get-user-info',
+    description: 'Get authenticated user info'
+  },
+  async (_, ctx) => object({
+    userId: ctx.auth.user.userId,
+    email: ctx.auth.user.email,
+    name: ctx.auth.user.name
+  })
+);
+
+server.tool(
+  {
+    name: 'get-auth0-profile',
+    description: 'Fetch full profile from Auth0'
+  },
+  async (_, ctx) => {
+    const domain = process.env.MCP_USE_OAUTH_AUTH0_DOMAIN;
+    const res = await fetch(`https://${domain}/userinfo`, {
+      headers: { Authorization: `Bearer ${ctx.auth.accessToken}` }
+    });
+    return object(await res.json());
+  }
+);
+
+await server.listen();
+```
+
+### WorkOS Server
+
+See `examples/server/oauth/workos/src/server.ts` for a complete WorkOS example with API calls.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Widgets" icon="window" href="/typescript/server/widgets">
+    Create interactive UIs
+  </Card>
+  <Card title="Notifications" icon="bell" href="/typescript/server/notifications">
+    Real-time updates
+  </Card>
+  <Card title="Sampling" icon="sparkles" href="/typescript/server/sampling">
+    LLM integration
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

@@ -1,0 +1,239 @@
+---
+title: 'Deployment Overview'
+description: 'Learn about deployment options for your MCP servers'
+icon: 'rocket'
+---
+
+## Overview
+
+MCP-use provides multiple deployment options to host your MCP servers in production. Whether you need a fully managed cloud solution or prefer self-hosting, mcp-use supports various deployment strategies to fit your needs.
+
+## Deployment Options
+
+<CardGroup cols={2}>
+  <Card title="Manufact Cloud" icon="cloud" href="/deployment/manufact-cloud">
+    Deploy to managed infrastructure with automatic scaling, observability, and GitHub integration
+  </Card>
+  <Card title="Self-Hosted" icon="server" href="/deployment/self-hosted">
+    Deploy your MCP servers on your own infrastructure with full control
+  </Card>
+  <Card title="Docker" icon="docker" href="/deployment/docker">
+    Containerize your MCP servers for consistent deployments across environments
+  </Card>
+  <Card title="Custom Clients" icon="plug" href="/deployment/custom-clients">
+    Integrate MCP servers with custom client applications
+  </Card>
+</CardGroup>
+
+## AI Assistant Integration
+
+<CardGroup cols={2}>
+  <Card title="ChatGPT" icon="message" href="/deployment/chatgpt">
+    Connect your MCP servers to ChatGPT for enhanced AI capabilities
+  </Card>
+  <Card title="Claude" icon="brain" href="/deployment/claude">
+    Integrate with Claude Desktop for seamless AI interactions
+  </Card>
+</CardGroup>
+
+## Choosing a Deployment Strategy
+
+### Manufact Cloud (Recommended)
+
+**Best for:**
+- Quick production deployments
+- Teams wanting managed infrastructure
+- Projects requiring observability and metrics
+- GitHub-based workflows
+
+**Key Features:**
+- Automatic deployments from GitHub
+- Branch-based deployments
+- Built-in observability and logging
+- Custom domains
+- Zero infrastructure management
+
+### Self-Hosted
+
+**Best for:**
+- Organizations with strict data requirements
+- Custom infrastructure needs
+- Air-gapped environments
+- Complete control over resources
+
+**Key Features:**
+- Full control over infrastructure
+- Custom networking configurations
+- On-premises deployment options
+- Integration with existing DevOps pipelines
+
+### Docker
+
+**Best for:**
+- Consistent environments across dev/staging/prod
+- Kubernetes deployments
+- Multi-cloud strategies
+- CI/CD pipelines
+
+**Key Features:**
+- Containerized deployments
+- Easy scaling and orchestration
+- Environment isolation
+- Portable across cloud providers
+
+## Architecture Considerations
+
+### Network Requirements
+
+MCP servers communicate over HTTP/HTTPS using the Model Context Protocol. Ensure your deployment environment allows:
+
+- **Inbound HTTP/HTTPS** traffic on your configured port (default: 3000)
+- **Outbound HTTPS** for external API calls (if your tools require them)
+- **WebSocket support** for SSE (Server-Sent Events) streaming
+
+### Resource Requirements
+
+<Note>
+  Minimum requirements vary based on your server's complexity and expected load.
+</Note>
+
+**Typical MCP Server:**
+- **CPU**: 0.5-1 vCPU
+- **Memory**: 512MB-1GB RAM
+- **Storage**: 1-5GB (depends on widgets and assets)
+
+**High-Traffic MCP Server:**
+- **CPU**: 2+ vCPUs
+- **Memory**: 2GB+ RAM
+- **Storage**: 5-10GB
+
+### Environment Variables
+
+Most MCP deployments require configuration via environment variables:
+
+```bash
+# Common environment variables
+NODE_ENV=production
+PORT=3000
+MCP_SERVER_URL=https://your-server.run.mcp-use.com/mcp
+
+# API keys and secrets (tool-specific)
+OPENAI_API_KEY=sk-...
+WORKOS_CLIENT_ID=client_...
+WORKOS_API_KEY=sk-...
+```
+
+<Warning>
+  Never commit API keys or secrets to version control. Use environment variables or secret management systems.
+</Warning>
+
+## Security Best Practices
+
+### Authentication
+
+1. **OAuth Integration**: Use OAuth providers (WorkOS, Auth0, Supabase) for user authentication
+2. **API Keys**: Secure your MCP endpoints with API key authentication
+3. **HTTPS Only**: Always use HTTPS in production
+
+### Secret Management
+
+<Tabs>
+  <Tab title="Manufact Cloud">
+    ```bash
+    # Set environment variables during deployment
+    mcp-use deploy --env OPENAI_API_KEY=sk-...
+    
+    # Or use .env file
+    mcp-use deploy --env-file .env.production
+    ```
+  </Tab>
+  <Tab title="Self-Hosted">
+    ```bash
+    # Use systemd environment files
+    sudo nano /etc/systemd/system/mcp-server.service
+    EnvironmentFile=/etc/mcp-server/env
+    
+    # Or Docker secrets
+    docker secret create openai_key ./openai_key.txt
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    # Use Docker secrets
+    docker run -d \
+      --env-file .env.production \
+      --secret openai_key \
+      your-mcp-server
+    ```
+  </Tab>
+</Tabs>
+
+### Network Security
+
+- **Firewall Rules**: Restrict access to trusted IP ranges
+- **Rate Limiting**: Implement rate limiting to prevent abuse
+- **CORS Configuration**: Configure CORS headers appropriately
+
+## Monitoring and Observability
+
+### Built-in Tools
+
+MCP-use includes built-in observability features:
+
+```typescript
+import { MCPServer } from "mcp-use/server";
+import { Langfuse } from "langfuse";
+
+const server = new MCPServer({
+  name: "my-server",
+  version: "1.0.0",
+  observability: {
+    langfuse: new Langfuse({
+      secretKey: process.env.LANGFUSE_SECRET_KEY,
+      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+      baseUrl: process.env.LANGFUSE_HOST,
+    }),
+  },
+});
+```
+
+### Metrics to Monitor
+
+- **Request Rate**: Number of tool calls per minute
+- **Latency**: Response time for tool execution
+- **Error Rate**: Failed tool calls and error types
+- **Resource Usage**: CPU, memory, and network utilization
+
+## Health Checks
+
+All MCP servers expose a health check endpoint:
+
+```bash
+# Health check endpoint
+curl https://your-server.run.mcp-use.com/healthz
+
+# Response
+{"status": "ok", "timestamp": "2025-02-19T10:30:00Z"}
+```
+
+Use this endpoint for:
+- Load balancer health checks
+- Container orchestration readiness probes
+- Uptime monitoring
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy to Manufact Cloud" icon="cloud-arrow-up" href="/deployment/manufact-cloud">
+    Get started with the fastest deployment option
+  </Card>
+  <Card title="Self-Host Your Server" icon="server" href="/deployment/self-hosted">
+    Set up your own infrastructure
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Containerize your MCP server
+  </Card>
+  <Card title="Integration Guides" icon="puzzle-piece" href="/deployment/chatgpt">
+    Connect to AI assistants
+  </Card>
+</CardGroup>

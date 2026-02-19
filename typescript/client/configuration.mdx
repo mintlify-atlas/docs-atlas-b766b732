@@ -1,0 +1,620 @@
+---
+title: "Configuration"
+description: "Complete guide to configuring MCPClient - formats, options, and best practices"
+icon: "gear"
+---
+
+## Overview
+
+MCPClient supports flexible configuration through JSON files, inline objects, or dynamic API calls. Configuration defines which MCP servers to connect to, how to authenticate, and what capabilities to enable.
+
+## Configuration Formats
+
+### JSON Configuration File
+
+The most common approach for persistent configurations:
+
+```json mcp-config.json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {
+        "DEBUG": "mcp:*"
+      }
+    },
+    "brave-search": {
+      "url": "https://mcp.brave.com/mcp",
+      "authToken": "${BRAVE_API_KEY}",
+      "preferSse": true
+    },
+    "github": {
+      "url": "https://mcp.github.com/mcp",
+      "authProvider": {
+        "type": "oauth",
+        "serverUrl": "https://oauth.github.com",
+        "clientId": "${GITHUB_CLIENT_ID}",
+        "scopes": ["repo", "user"]
+      }
+    }
+  },
+  "clientInfo": {
+    "name": "my-mcp-app",
+    "version": "1.0.0",
+    "description": "My MCP application"
+  }
+}
+```
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient('./mcp-config.json');
+// or
+const client = MCPClient.fromConfigFile('./mcp-config.json');
+```
+
+### Inline Object Configuration
+
+Programmatic configuration for dynamic setups:
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient({
+  mcpServers: {
+    'my-server': {
+      command: 'node',
+      args: ['server.js'],
+      env: {
+        PORT: '3000'
+      }
+    },
+    'api-server': {
+      url: 'https://api.example.com/mcp',
+      headers: {
+        'X-API-Key': process.env.API_KEY
+      }
+    }
+  },
+  clientInfo: {
+    name: 'mcp-client',
+    version: '1.0.0'
+  }
+});
+
+// Alternative syntax
+const client = MCPClient.fromDict({ /* config */ });
+```
+
+### Dynamic Configuration
+
+Add/remove servers at runtime:
+
+```typescript
+const client = new MCPClient(); // Start empty
+
+// Add servers dynamically
+client.addServer('weather', {
+  url: 'https://weather.com/mcp',
+  authToken: process.env.WEATHER_API_KEY
+});
+
+client.addServer('database', {
+  command: 'npx',
+  args: ['-y', '@modelcontextprotocol/server-postgres'],
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL
+  }
+});
+
+// Save to file
+client.saveConfig('./runtime-config.json');
+
+// Remove when done
+client.removeServer('weather');
+```
+
+## Configuration Schema
+
+### Top-Level Config
+
+<ParamField path="mcpServers" type="Record<string, ServerConfig>" required>
+  Map of server names to their configurations. Each key is a unique identifier for the server.
+</ParamField>
+
+<ParamField path="clientInfo" type="ClientInfo">
+  Client identification sent to servers during initialization. Defaults to mcp-use metadata.
+  
+  ```typescript
+  {
+    name: 'mcp-use',
+    version: '1.13.2',
+    title?: 'My App',
+    description?: 'App description',
+    icons?: [{ src: 'https://...', mimeType?: 'image/png' }],
+    websiteUrl?: 'https://example.com'
+  }
+  ```
+</ParamField>
+
+<ParamField path="onSampling" type="OnSamplingCallback">
+  Global default callback for sampling requests. Can be overridden per server (`src/config.ts:35`).
+</ParamField>
+
+<ParamField path="onElicitation" type="OnElicitationCallback">
+  Global default callback for elicitation requests (`src/config.ts:42`).
+</ParamField>
+
+<ParamField path="onNotification" type="OnNotificationCallback">
+  Global default callback for server notifications (`src/config.ts:48`).
+</ParamField>
+
+### Server Configuration
+
+Each server in `mcpServers` uses one of two connector types:
+
+#### Stdio Connector Config
+
+For local process-based servers (`src/config.ts:93`):
+
+<ParamField path="command" type="string" required>
+  Command to execute (e.g., `"npx"`, `"node"`, `"python"`).
+</ParamField>
+
+<ParamField path="args" type="string[]" required>
+  Command arguments.
+  
+  ```json
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  ```
+</ParamField>
+
+<ParamField path="env" type="Record<string, string>">
+  Environment variables merged with `process.env`.
+  
+  ```json
+  "env": {
+    "DEBUG": "mcp:*",
+    "NODE_ENV": "production"
+  }
+  ```
+</ParamField>
+
+#### HTTP Connector Config
+
+For remote HTTP/WebSocket servers (`src/config.ts:102`):
+
+<ParamField path="url" type="string" required>
+  Base URL of the MCP server endpoint.
+  
+  ```json
+  "url": "https://api.example.com/mcp"
+  ```
+</ParamField>
+
+<ParamField path="authToken" type="string">
+  Bearer token for authentication. Added as `Authorization: Bearer <token>` header.
+</ParamField>
+
+<ParamField path="headers" type="Record<string, string>">
+  Additional HTTP headers for all requests.
+  
+  ```json
+  "headers": {
+    "X-API-Key": "${API_KEY}",
+    "X-Client-ID": "my-app"
+  }
+  ```
+</ParamField>
+
+<ParamField path="authProvider" type="AuthProvider">
+  OAuth configuration for authentication. Handles token refresh automatically.
+  
+  ```typescript
+  {
+    type: 'oauth',
+    serverUrl: 'https://oauth.provider.com',
+    clientId: process.env.CLIENT_ID,
+    clientSecret?: process.env.CLIENT_SECRET,
+    scopes: ['read', 'write'],
+    redirectUri?: 'http://localhost:3000/callback'
+  }
+  ```
+</ParamField>
+
+<ParamField path="transport" type="'http' | 'sse'">
+  Preferred transport type. Default: `"http"` (auto-fallback to SSE).
+</ParamField>
+
+<ParamField path="preferSse" type="boolean">
+  Force SSE transport instead of trying streamable HTTP first. Default: `false`.
+</ParamField>
+
+<ParamField path="disableSseFallback" type="boolean">
+  Disable automatic SSE fallback when streamable HTTP fails. Default: `false`.
+</ParamField>
+
+<ParamField path="fetch" type="typeof fetch">
+  Custom fetch implementation (for testing or proxying).
+</ParamField>
+
+#### Shared Server Options
+
+<ParamField path="clientInfo" type="ClientInfo">
+  Override global `clientInfo` for this specific server.
+</ParamField>
+
+<ParamField path="onSampling" type="OnSamplingCallback">
+  Server-specific sampling callback (overrides global).
+</ParamField>
+
+<ParamField path="onElicitation" type="OnElicitationCallback">
+  Server-specific elicitation callback (overrides global).
+</ParamField>
+
+<ParamField path="onNotification" type="OnNotificationCallback">
+  Server-specific notification callback (overrides global).
+</ParamField>
+
+## Client Options
+
+Options passed to the `MCPClient` constructor (`src/client.ts:89`):
+
+```typescript
+const client = new MCPClient('./config.json', {
+  codeMode: true,
+  onSampling: async (params) => { /* ... */ },
+  onElicitation: async (params) => { /* ... */ },
+  onNotification: (notification) => { /* ... */ }
+});
+```
+
+<ParamField path="codeMode" type="boolean | CodeModeConfig">
+  Enable code execution mode with VM or E2B sandboxing.
+  
+  **Boolean form:**
+  ```typescript
+  { codeMode: true } // Uses VM executor with defaults
+  ```
+  
+  **Advanced form:**
+  ```typescript
+  {
+    codeMode: {
+      enabled: true,
+      executor: 'e2b', // or 'vm' or custom function
+      executorOptions: {
+        apiKey: process.env.E2B_API_KEY, // E2B only
+        timeoutMs: 60000,                // E2B or VM
+        memoryLimitMb: 512               // VM only
+      }
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="onSampling" type="OnSamplingCallback">
+  Global callback for sampling requests from servers.
+  
+  ```typescript
+  onSampling: async (params) => {
+    const response = await anthropic.messages.create(params);
+    return response;
+  }
+  ```
+</ParamField>
+
+<ParamField path="onElicitation" type="OnElicitationCallback">
+  Global callback for elicitation (user input) requests.
+  
+  ```typescript
+  onElicitation: async (params) => {
+    if (params.kind === 'form') {
+      const data = await promptUser(params.schema);
+      return { kind: 'accepted', content: data };
+    }
+    return { kind: 'declined' };
+  }
+  ```
+</ParamField>
+
+<ParamField path="onNotification" type="OnNotificationCallback">
+  Global callback for server notifications.
+  
+  ```typescript
+  onNotification: (notification) => {
+    console.log(`[${notification.method}]`, notification.params);
+  }
+  ```
+</ParamField>
+
+## Configuration Examples
+
+### Multi-Server Setup
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"]
+    },
+    "brave-search": {
+      "url": "https://mcp.brave.com/mcp",
+      "authToken": "${BRAVE_API_KEY}"
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    },
+    "github": {
+      "url": "https://mcp.github.com/mcp",
+      "authProvider": {
+        "type": "oauth",
+        "serverUrl": "https://oauth.github.com",
+        "clientId": "${GITHUB_CLIENT_ID}",
+        "scopes": ["repo"]
+      }
+    }
+  },
+  "clientInfo": {
+    "name": "my-assistant",
+    "version": "2.0.0"
+  }
+}
+```
+
+### Environment-Specific Config
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const isDev = process.env.NODE_ENV === 'development';
+
+const client = new MCPClient({
+  mcpServers: {
+    'api': {
+      url: isDev 
+        ? 'http://localhost:3000/mcp'
+        : 'https://api.production.com/mcp',
+      authToken: isDev 
+        ? 'dev-token'
+        : process.env.API_TOKEN,
+      // Enable SSE in dev for easier debugging
+      preferSse: isDev
+    }
+  }
+}, {
+  codeMode: isDev // Only enable code mode in development
+});
+```
+
+### With Code Execution
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient({
+  mcpServers: {
+    'tools': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-everything']
+    }
+  }
+}, {
+  codeMode: {
+    enabled: true,
+    executor: 'e2b',
+    executorOptions: {
+      apiKey: process.env.E2B_API_KEY,
+      timeoutMs: 120000 // 2 minutes
+    }
+  },
+  onSampling: async (params) => {
+    // Implement LLM integration
+    return await callLLM(params);
+  }
+});
+
+// Execute code with MCP context
+const result = await client.executeCode(`
+  const tools = await searchTools('file');
+  for (const tool of tools) {
+    console.log(tool.name);
+  }
+  return tools.length;
+`);
+```
+
+### Per-Server Callbacks
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient({
+  mcpServers: {
+    'server-a': {
+      url: 'https://a.com/mcp',
+      onSampling: async (params) => {
+        // Use GPT-4 for this server
+        return await openai.chat.completions.create(params);
+      }
+    },
+    'server-b': {
+      url: 'https://b.com/mcp',
+      onSampling: async (params) => {
+        // Use Claude for this server
+        return await anthropic.messages.create(params);
+      }
+    }
+  }
+}, {
+  // Global fallback
+  onSampling: async (params) => {
+    return await defaultLLM(params);
+  }
+});
+```
+
+## Loading Configurations
+
+### From File
+
+```typescript
+import { MCPClient, loadConfigFile } from 'mcp-use';
+
+// Method 1: Constructor
+const client1 = new MCPClient('./mcp-config.json');
+
+// Method 2: Static factory
+const client2 = MCPClient.fromConfigFile('./mcp-config.json');
+
+// Method 3: Manual load
+const config = loadConfigFile('./mcp-config.json');
+const client3 = new MCPClient(config);
+```
+
+### From Environment
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient({
+  mcpServers: {
+    'api': {
+      url: process.env.MCP_SERVER_URL!,
+      authToken: process.env.MCP_AUTH_TOKEN,
+      headers: {
+        'X-App-ID': process.env.APP_ID!
+      }
+    }
+  }
+});
+```
+
+### From Remote Source
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const response = await fetch('https://config.example.com/mcp.json');
+const config = await response.json();
+
+const client = MCPClient.fromDict(config);
+```
+
+## Saving Configurations
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient();
+
+// Build configuration dynamically
+client.addServer('server1', {
+  url: 'https://api.example.com/mcp'
+});
+
+client.addServer('server2', {
+  command: 'node',
+  args: ['server.js']
+});
+
+// Save to file
+client.saveConfig('./generated-config.json');
+
+// Saved file can be used later
+const client2 = new MCPClient('./generated-config.json');
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables for Secrets">
+    Never commit API keys or tokens:
+    
+    ```json
+    {
+      "mcpServers": {
+        "api": {
+          "url": "https://api.example.com/mcp",
+          "authToken": "${API_TOKEN}" // ❌ Doesn't auto-substitute
+        }
+      }
+    }
+    ```
+    
+    Load from environment instead:
+    
+    ```typescript
+    const config = loadConfigFile('./config.json');
+config.mcpServers.api.authToken = process.env.API_TOKEN;
+const client = new MCPClient(config);
+    ```
+  </Accordion>
+
+  <Accordion title="Separate Dev and Prod Configs">
+    Use different files per environment:
+    
+    ```typescript
+    const configFile = process.env.NODE_ENV === 'production'
+      ? './config.prod.json'
+      : './config.dev.json';
+    
+    const client = new MCPClient(configFile);
+    ```
+  </Accordion>
+
+  <Accordion title="Validate Configuration Early">
+    Catch config errors before creating sessions:
+    
+    ```typescript
+    const client = new MCPClient('./config.json');
+    
+    const names = client.getServerNames();
+    if (names.length === 0) {
+      throw new Error('No servers configured');
+    }
+    
+    // Validate required servers exist
+    const required = ['filesystem', 'search'];
+    for (const name of required) {
+      if (!names.includes(name)) {
+        throw new Error(`Missing required server: ${name}`);
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Use ClientInfo for Identification">
+    Help server developers identify your client:
+    
+    ```typescript
+    const client = new MCPClient({
+      clientInfo: {
+        name: 'my-ai-assistant',
+        version: '1.2.3',
+        description: 'AI-powered code assistant',
+        websiteUrl: 'https://myapp.com'
+      },
+      mcpServers: { /* ... */ }
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Connecting" icon="plug" href="/typescript/client/connecting">
+    Learn about connection methods and transports
+  </Card>
+  <Card title="Sessions" icon="diagram-project" href="/typescript/client/sessions">
+    Master session management and operations
+  </Card>
+</CardGroup>

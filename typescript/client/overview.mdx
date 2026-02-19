@@ -1,0 +1,466 @@
+---
+title: "Client Overview"
+description: "Complete guide to MCPClient - architecture, features, and usage patterns"
+icon: "circle-nodes"
+---
+
+## Overview
+
+The `MCPClient` class is the primary interface for connecting to and managing MCP servers in Node.js applications. It provides a complete implementation with advanced features including multiple transport protocols, code execution, and session management.
+
+## Architecture
+
+The mcp-use TypeScript client follows a layered architecture:
+
+```
+MCPClient (Node.js)          BaseMCPClient (Cross-platform)
+    │                              │
+    ├── Config Management          ├── Session Management
+    ├── Connector Creation         ├── Server Registry
+    ├── Code Mode                  └── Base Operations
+    └── File I/O
+         │
+         ├── MCPSession (per server)
+         │      │
+         │      ├── Connection Lifecycle
+         │      ├── Tool Invocation
+         │      ├── Resource Access
+         │      └── Notification Handling
+         │
+         └── Connectors (transport layer)
+                │
+                ├── StdioConnector (process-based)
+                ├── HttpConnector (HTTP + SSE fallback)
+                └── WebSocketConnector (coming soon)
+```
+
+### Class Hierarchy
+
+**BaseMCPClient** (`src/client/base.ts:35`)
+- Abstract base class with cross-platform functionality
+- Manages server configurations and sessions
+- Provides session lifecycle methods
+- Platform-agnostic operations
+
+**MCPClient** (`src/client.ts:214`) extends BaseMCPClient
+- Node.js-specific implementation
+- Supports all connector types (Stdio, HTTP, WebSocket)
+- File system operations for config loading/saving
+- Optional code execution mode with sandboxing
+
+**BrowserMCPClient** (separate bundle)
+- Browser-specific implementation
+- HTTP/WebSocket connectors only
+- Local storage for configurations
+- See [Browser Client docs](/typescript/client/browser)
+
+## Core Components
+
+### MCPClient
+
+The main client class providing:
+- **Multi-server management**: Connect to multiple MCP servers simultaneously
+- **Session orchestration**: Create, manage, and close sessions
+- **Configuration handling**: Load from files or inline objects
+- **Code execution mode**: Execute code dynamically with VM or E2B sandboxes
+- **Advanced callbacks**: Sampling, elicitation, and notification handlers
+
+### MCPSession
+
+Manages individual server connections (`src/session.ts:55`):
+- **Connection lifecycle**: Connect, initialize, disconnect
+- **Tool operations**: List and call tools with type safety
+- **Resource access**: List, read, and subscribe to resources
+- **Prompt management**: List and retrieve prompts
+- **Notification handling**: React to server events
+- **Roots management**: Advertise file system roots to servers
+
+### Connectors
+
+Transport layer implementations:
+
+<CardGroup cols={3}>
+  <Card title="StdioConnector" icon="terminal">
+    Process-based communication via stdin/stdout. Best for local servers.
+  </Card>
+  <Card title="HttpConnector" icon="globe">
+    HTTP transport with automatic SSE fallback. Best for remote servers.
+  </Card>
+  <Card title="WebSocketConnector" icon="bolt">
+    WebSocket transport for bidirectional streaming. Coming soon.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Multi-Server Support
+
+Connect to multiple MCP servers concurrently:
+
+```typescript
+const client = new MCPClient({
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    },
+    'brave-search': {
+      url: 'https://mcp.brave.com/mcp',
+      authToken: process.env.BRAVE_API_KEY
+    },
+    'postgres': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-postgres']
+    }
+  }
+});
+
+// Create all sessions at once
+const sessions = await client.createAllSessions();
+
+// Access specific sessions
+const fs = client.requireSession('filesystem');
+const search = client.requireSession('brave-search');
+```
+
+### Code Execution Mode
+
+Execute code dynamically using VM or E2B sandboxes (`src/client.ts:246`):
+
+```typescript
+const client = new MCPClient('./config.json', {
+  codeMode: {
+    enabled: true,
+    executor: 'e2b', // or 'vm' for local execution
+    executorOptions: {
+      apiKey: process.env.E2B_API_KEY,
+      timeoutMs: 60000
+    }
+  }
+});
+
+// Execute code with MCP context
+const result = await client.executeCode(`
+  const tools = await searchTools('file');
+  console.log('Found tools:', tools.length);
+  return tools;
+`);
+
+console.log(result.stdout);      // "Found tools: 5"
+console.log(result.returnValue); // Array of tools
+```
+
+### Advanced Callbacks
+
+Handle server requests with custom logic (`src/client.ts:89-134`):
+
+```typescript
+import { MCPClient } from 'mcp-use';
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic();
+
+const client = new MCPClient('./config.json', {
+  // Sampling: Handle LLM requests from servers
+  onSampling: async (params) => {
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      ...params
+    });
+    return response;
+  },
+
+  // Elicitation: Handle user input requests
+  onElicitation: async (params) => {
+    if (params.kind === 'form') {
+      // Collect user input for form fields
+      const data = await collectFormData(params.schema);
+      return { kind: 'accepted', content: data };
+    } else {
+      // URL-based elicitation
+      return { kind: 'accepted' };
+    }
+  },
+
+  // Notifications: React to server events
+  onNotification: (notification) => {
+    if (notification.method === 'notifications/tools/list_changed') {
+      console.log('Tools list updated!');
+    }
+  }
+});
+```
+
+## Properties and Methods
+
+### Static Methods
+
+<ResponseField name="getPackageVersion" type="() => string">
+  Returns the mcp-use package version (`src/client.ts:228`).
+  
+  ```typescript
+  console.log(MCPClient.getPackageVersion()); // "1.13.2"
+  ```
+</ResponseField>
+
+<ResponseField name="fromDict" type="(cfg: Record<string, any>, options?: MCPClientOptions) => MCPClient">
+  Creates a client from configuration object (`src/client.ts:431`).
+  
+  ```typescript
+  const client = MCPClient.fromDict({
+    mcpServers: { /* ... */ }
+  });
+  ```
+</ResponseField>
+
+<ResponseField name="fromConfigFile" type="(path: string, options?: MCPClientOptions) => MCPClient">
+  Creates a client from JSON file (`src/client.ts:466`).
+  
+  ```typescript
+  const client = MCPClient.fromConfigFile('./mcp-config.json');
+  ```
+</ResponseField>
+
+### Instance Properties
+
+<ResponseField name="codeMode" type="boolean">
+  Indicates if code execution mode is enabled (`src/client.ts:246`).
+</ResponseField>
+
+<ResponseField name="activeSessions" type="string[]">
+  List of server names with active sessions (`src/client/base.ts:58`).
+</ResponseField>
+
+### Configuration Methods
+
+<ResponseField name="addServer" type="(name: string, config: ServerConfig) => void">
+  Dynamically add a server configuration (`src/client/base.ts:131`).
+  
+  ```typescript
+  client.addServer('new-server', {
+    url: 'https://api.example.com/mcp'
+  });
+  ```
+</ResponseField>
+
+<ResponseField name="removeServer" type="(name: string) => void">
+  Remove a server configuration (`src/client/base.ts:158`).
+</ResponseField>
+
+<ResponseField name="getServerNames" type="() => string[]">
+  Get all configured server names (`src/client/base.ts:184`).
+</ResponseField>
+
+<ResponseField name="getServerConfig" type="(name: string) => ServerConfig">
+  Get configuration for specific server (`src/client/base.ts:205`).
+</ResponseField>
+
+<ResponseField name="getConfig" type="() => Record<string, any>">
+  Get complete client configuration (`src/client/base.ts:222`).
+</ResponseField>
+
+<ResponseField name="saveConfig" type="(filepath: string) => void">
+  Save current configuration to file (Node.js only) (`src/client.ts:496`).
+</ResponseField>
+
+### Session Management
+
+<ResponseField name="createSession" type="(serverName: string, autoInit?: boolean) => Promise<MCPSession>">
+  Create a session for a specific server (`src/client/base.ts:272`).
+  
+  ```typescript
+  const session = await client.createSession('my-server');
+  ```
+</ResponseField>
+
+<ResponseField name="createAllSessions" type="(autoInit?: boolean) => Promise<Record<string, MCPSession>>">
+  Create sessions for all configured servers (`src/client/base.ts:328`).
+</ResponseField>
+
+<ResponseField name="getSession" type="(serverName: string) => MCPSession | null">
+  Get an existing session (returns null if not found) (`src/client/base.ts:367`).
+</ResponseField>
+
+<ResponseField name="requireSession" type="(serverName: string) => MCPSession">
+  Get an existing session (throws if not found) (`src/client/base.ts:398`).
+</ResponseField>
+
+<ResponseField name="getAllActiveSessions" type="() => Record<string, MCPSession>">
+  Get all active sessions as a map (`src/client/base.ts:428`).
+</ResponseField>
+
+<ResponseField name="closeSession" type="(serverName: string) => Promise<void>">
+  Close a specific session (`src/client/base.ts:455`).
+</ResponseField>
+
+<ResponseField name="closeAllSessions" type="() => Promise<void>">
+  Close all sessions gracefully (`src/client/base.ts:507`).
+</ResponseField>
+
+### Code Execution (when enabled)
+
+<ResponseField name="executeCode" type="(code: string, timeout?: number) => Promise<ExecutionResult>">
+  Execute JavaScript/TypeScript code in sandbox (`src/client.ts:658`).
+  
+  ```typescript
+  const result = await client.executeCode('return 2 + 2');
+  console.log(result.returnValue); // 4
+  ```
+</ResponseField>
+
+<ResponseField name="searchTools" type="(query?: string, level?: 'names' | 'descriptions' | 'full') => Promise<ToolSearchResponse>">
+  Search for tools across all servers (`src/client.ts:702`).
+</ResponseField>
+
+### Cleanup
+
+<ResponseField name="close" type="() => Promise<void>">
+  Close client and clean up all resources (`src/client.ts:775`).
+  
+  ```typescript
+  await client.close(); // Closes executors and all sessions
+  ```
+</ResponseField>
+
+## Usage Patterns
+
+### Basic Client Lifecycle
+
+```typescript
+import { MCPClient } from 'mcp-use';
+
+const client = new MCPClient('./mcp-config.json');
+
+try {
+  // Connect to servers
+  await client.createAllSessions();
+  
+  // Use sessions
+  const session = client.requireSession('my-server');
+  const tools = await session.listTools();
+  
+  // Call tools
+  for (const tool of tools) {
+    const result = await session.callTool(tool.name, {});
+    console.log(result);
+  }
+} finally {
+  // Always cleanup
+  await client.close();
+}
+```
+
+### Dynamic Server Management
+
+```typescript
+const client = new MCPClient();
+
+// Start with no servers
+console.log(client.getServerNames()); // []
+
+// Add servers dynamically
+client.addServer('weather', {
+  url: 'https://api.weather.com/mcp'
+});
+
+// Create session for new server
+const weather = await client.createSession('weather');
+
+// Remove when done
+await client.closeSession('weather');
+client.removeServer('weather');
+```
+
+### Error Handling
+
+```typescript
+try {
+  const session = await client.createSession('my-server');
+} catch (error) {
+  if (error.message.includes('not found')) {
+    console.error('Server not configured');
+  } else if (error.code === 401) {
+    console.error('Authentication required');
+  } else {
+    console.error('Connection failed:', error);
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Clean Up Resources">
+    Use try/finally to ensure cleanup:
+    
+    ```typescript
+    const client = new MCPClient('./config.json');
+    try {
+      await client.createAllSessions();
+      // Use client...
+    } finally {
+      await client.close();
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Use requireSession for Type Safety">
+    Prefer `requireSession()` over `getSession()` when you expect a session to exist:
+    
+    ```typescript
+    // Good: throws descriptive error if not found
+    const session = client.requireSession('my-server');
+    
+    // Avoid: requires null checking
+    const session = client.getSession('my-server');
+    if (!session) throw new Error('Not found');
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Connection Failures Gracefully">
+    Individual session failures shouldn't crash your application:
+    
+    ```typescript
+    const results = [];
+    for (const name of client.getServerNames()) {
+      try {
+        await client.createSession(name);
+        results.push({ name, status: 'connected' });
+      } catch (error) {
+        results.push({ name, status: 'failed', error });
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Use Code Mode Sparingly">
+    Code execution mode is powerful but has performance implications:
+    
+    ```typescript
+    // Good: Enable only when needed
+    const client = new MCPClient('./config.json', {
+      codeMode: process.env.ENABLE_CODE_MODE === 'true'
+    });
+    
+    // Consider: Use E2B for production, VM for development
+    const executor = process.env.NODE_ENV === 'production' ? 'e2b' : 'vm';
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/typescript/client/configuration">
+    Learn about configuration formats and options
+  </Card>
+  <Card title="Connecting" icon="plug" href="/typescript/client/connecting">
+    Explore connection methods and transports
+  </Card>
+  <Card title="Sessions" icon="diagram-project" href="/typescript/client/sessions">
+    Master session management and operations
+  </Card>
+  <Card title="API Reference" icon="code" href="/typescript/api/client">
+    Complete API documentation
+  </Card>
+</CardGroup>

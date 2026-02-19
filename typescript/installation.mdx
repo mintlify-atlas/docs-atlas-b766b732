@@ -1,0 +1,136 @@
+---
+title: 'Installation'
+description: 'Install mcp-use TypeScript SDK'
+icon: 'download'
+---
+
+# Installation
+
+Install the mcp-use TypeScript SDK using your preferred package manager.
+
+## Requirements
+
+- **Node.js**: 20.19.0+ or 22.12.0+
+- **Package Manager**: npm, pnpm, yarn, or bun
+
+## Install mcp-use
+
+<CodeGroup>
+
+```bash npm
+npm install mcp-use
+```
+
+```bash pnpm
+pnpm add mcp-use
+```
+
+```bash yarn
+yarn add mcp-use
+```
+
+```bash bun
+bun add mcp-use
+```
+
+</CodeGroup>
+
+## Optional Dependencies
+
+Depending on which features you're using, you may need additional dependencies:
+
+### For MCP Agent
+
+The MCP Agent requires LangChain and an LLM provider:
+
+<CodeGroup>
+
+```bash npm
+npm install langchain @langchain/core @langchain/openai
+```
+
+```bash pnpm
+pnpm add langchain @langchain/core @langchain/openai
+```
+
+</CodeGroup>
+
+Supported LLM providers:
+- `@langchain/openai` - OpenAI (GPT-4, GPT-3.5)
+- `@langchain/anthropic` - Anthropic (Claude)
+- `@langchain/google-genai` - Google (Gemini)
+
+### For Code Execution Mode
+
+For secure sandboxed code execution:
+
+```bash
+npm install @e2b/code-interpreter
+```
+
+### For React Integration
+
+For React hooks and components:
+
+```bash
+npm install react react-dom
+```
+
+### For Observability
+
+For Langfuse integration:
+
+```bash
+npm install langfuse langfuse-langchain
+```
+
+## Verify Installation
+
+Create a simple test file to verify the installation:
+
+```typescript test.ts
+import { MCPClient } from 'mcp-use/client';
+import { MCPServer } from 'mcp-use/server';
+
+console.log('mcp-use installed successfully!');
+```
+
+Run it:
+
+```bash
+node --loader tsx test.ts
+```
+
+## TypeScript Configuration
+
+Ensure your `tsconfig.json` has the following settings:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/typescript/quickstart">
+    Get started with your first MCP integration
+  </Card>
+  <Card title="MCP Server" icon="server" href="/typescript/server/overview">
+    Build MCP servers
+  </Card>
+  <Card title="MCP Client" icon="plug" href="/typescript/client/overview">
+    Connect to MCP servers
+  </Card>
+  <Card title="MCP Agent" icon="robot" href="/typescript/agent/overview">
+    Create AI agents
+  </Card>
+</CardGroup>

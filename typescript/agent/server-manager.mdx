@@ -1,0 +1,489 @@
+---
+title: 'ServerManager'
+description: 'Dynamic server selection and management for agents'
+icon: 'server'
+---
+
+# ServerManager
+
+The ServerManager enables agents to dynamically connect to MCP servers at runtime, choose which server's tools to use, and switch between servers during execution.
+
+## Overview
+
+Without ServerManager, agents have access to all tools from all connected servers simultaneously. With ServerManager, agents can:
+
+- Connect to servers on-demand
+- Activate one server at a time
+- Switch between servers during execution
+- Add new servers from configuration
+- Release server connections when done
+
+This is useful for:
+- **Resource management** - Only load tools when needed
+- **Security** - Limit access to specific servers
+- **Dynamic workflows** - Let the agent choose appropriate tools
+- **Multi-server orchestration** - Coordinate across many servers
+
+## Basic Usage
+
+Enable ServerManager:
+
+```typescript
+import { MCPAgent } from 'mcp-use/agent';
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+    },
+    github: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN }
+    },
+    web: {
+      url: 'https://api.example.com/mcp'
+    }
+  },
+  useServerManager: true  // Enable ServerManager
+});
+
+// Agent now has access to management tools
+const result = await agent.run(
+  'List available servers, then connect to filesystem and list files'
+);
+
+await agent.close();
+```
+
+## Management Tools
+
+When ServerManager is enabled, the agent gets these tools:
+
+### 1. list_mcp_servers
+
+Lists all configured servers and their status:
+
+```typescript
+// Agent can use this tool
+const result = await agent.run('What servers are available?');
+// Agent calls: list_mcp_servers()
+```
+
+Output includes:
+- Server names
+- Connection status
+- Initialization status
+- Available tool count
+
+### 2. connect_mcp_server
+
+Connects to a configured server:
+
+```typescript
+const result = await agent.run('Connect to the filesystem server');
+// Agent calls: connect_mcp_server({ serverName: "filesystem" })
+```
+
+### 3. acquire_active_mcp_server
+
+Activates a server, making its tools available:
+
+```typescript
+const result = await agent.run('Use the github server tools');
+// Agent calls: acquire_active_mcp_server({ serverName: "github" })
+```
+
+### 4. release_mcp_server_connection
+
+Releases the active server connection:
+
+```typescript
+const result = await agent.run('Release the current server');
+// Agent calls: release_mcp_server_connection()
+```
+
+### 5. add_mcp_server_from_config
+
+Dynamically adds a new server:
+
+```typescript
+const result = await agent.run(`
+  Add a new server called 'database' with this config:
+  command: npx, args: ["-y", "@org/mcp-server-db"]
+`);
+// Agent calls: add_mcp_server_from_config({
+//   serverName: "database",
+//   config: { command: "npx", args: [...] }
+// })
+```
+
+## How It Works
+
+### Initial State
+
+When ServerManager is enabled:
+- No servers are connected initially
+- Agent only sees management tools
+- No domain-specific tools available yet
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: { command: 'npx', args: [...] },
+    github: { command: 'npx', args: [...] }
+  },
+  useServerManager: true
+});
+
+// At this point:
+// - No servers connected
+// - Only management tools available
+```
+
+### Connecting Servers
+
+The agent connects when needed:
+
+```typescript
+await agent.run('List files in current directory');
+
+// Agent's reasoning:
+// 1. Sees "list files" requires filesystem access
+// 2. Calls list_mcp_servers() to see available servers
+// 3. Calls connect_mcp_server({ serverName: "filesystem" })
+// 4. Calls acquire_active_mcp_server({ serverName: "filesystem" })
+// 5. Now has access to filesystem tools
+// 6. Calls list_directory({ path: "." })
+```
+
+### Switching Servers
+
+Agent can switch between servers:
+
+```typescript
+await agent.run(`
+  1. List files in current directory
+  2. Create a GitHub issue for any TODO comments found
+`);
+
+// Agent's execution:
+// 1. Connects to filesystem server
+// 2. Lists files and finds TODOs
+// 3. Releases filesystem server
+// 4. Connects to github server
+// 5. Creates issue
+```
+
+## Complete Example
+
+```typescript examples/agent/server-management/complete_example.ts
+import { MCPAgent } from 'mcp-use/agent';
+
+async function main() {
+  const agent = new MCPAgent({
+    llm: 'anthropic/claude-3-5-sonnet-20241022',
+    mcpServers: {
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()]
+      },
+      github: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-github'],
+        env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN }
+      },
+      web: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-puppeteer']
+      }
+    },
+    useServerManager: true,
+    maxSteps: 30,
+    verbose: true
+  });
+
+  const query = `
+    1. List all available MCP servers
+    2. Connect to the filesystem server
+    3. Find all TypeScript files in the src directory
+    4. If you find any TODO comments, connect to GitHub and create an issue
+    5. Visit the GitHub repo URL using the web server
+    6. Tell me what you accomplished
+  `;
+
+  console.log('Starting multi-server workflow...\n');
+
+  try {
+    const result = await agent.run(query);
+    console.log('\nResult:', result);
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await agent.close();
+  }
+}
+
+main();
+```
+
+## Prefetching Tools
+
+ServerManager can prefetch tools from all servers at initialization:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: { /* ... */ },
+  useServerManager: true
+});
+
+// Manually prefetch (usually done automatically)
+await agent.initialize();
+
+// Now ServerManager has cached all server tools
+// Switching servers is faster
+```
+
+This reduces latency when the agent switches servers.
+
+## Custom ServerManager
+
+Create a custom ServerManager with modified behavior:
+
+```typescript
+import { ServerManager } from 'mcp-use/managers';
+import { MCPClient } from 'mcp-use/client';
+import { LangChainAdapter } from 'mcp-use/adapters';
+
+const client = new MCPClient({ mcpServers: {...} });
+const adapter = new LangChainAdapter();
+
+const customManager = new ServerManager(client, adapter);
+
+// Override management tools
+import { ListMCPServersTool } from 'mcp-use/managers/tools';
+
+customManager.setManagementTools([
+  new ListMCPServersTool(customManager),
+  // Add only the tools you want
+]);
+
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  client,
+  useServerManager: true,
+  serverManagerFactory: () => customManager
+});
+```
+
+## ServerManager State
+
+Track ServerManager state:
+
+```typescript src/agents/mcp_agent.ts:100-102
+// Access the ServerManager
+const manager = agent['serverManager'];
+
+if (manager) {
+  // Log current state
+  manager.logState('Current state');
+  
+  // Check active server
+  console.log('Active server:', manager.activeServer);
+  
+  // Check initialized servers
+  console.log('Initialized:', manager.initializedServers);
+  
+  // Check available tools per server
+  console.log('Tools:', manager.serverTools);
+}
+```
+
+Output:
+```
+Server Manager State: [Current state]
+┌─────────┬─────────────┬───────────┬────────────┬────────────┬────────┐
+│ (index) │ Server Name │ Connected │ Initialized│ Tool Count │ Active │
+├─────────┼─────────────┼───────────┼────────────┼────────────┼────────┤
+│    0    │'filesystem' │    '✅'   │    '✅'    │     12     │  '✅'  │
+│    1    │  'github'   │    '❌'   │    '❌'    │     0      │  '❌'  │
+│    2    │   'web'     │    '❌'   │    '❌'    │     0      │  '❌'  │
+└─────────┴─────────────┴───────────┴────────────┴────────────┴────────┘
+```
+
+## Use Cases
+
+### 1. Cost Optimization
+
+Only connect to expensive servers when needed:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    cheap: { command: 'npx', args: [...] },      // Free tools
+    expensive: { url: 'https://paid-api.com' }   // Paid API
+  },
+  useServerManager: true
+});
+
+await agent.run(`
+  Try to solve this using cheap tools first.
+  Only use expensive tools if absolutely necessary.
+`);
+```
+
+### 2. Security Boundaries
+
+Limit access to sensitive servers:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    public: { command: 'npx', args: [...] },
+    admin: { command: 'npx', args: [...] }  // Admin-only tools
+  },
+  useServerManager: true
+});
+
+// Agent can list servers but must explicitly connect
+// Provides audit trail of server access
+```
+
+### 3. Resource Constraints
+
+Manage memory and connections:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    server1: {...},
+    server2: {...},
+    server3: {...},
+    server4: {...}
+  },
+  useServerManager: true
+});
+
+// Only one server active at a time
+// Reduces memory and connection overhead
+await agent.run('Use the right server for each task');
+```
+
+### 4. Dynamic Server Discovery
+
+Add servers at runtime:
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {
+    filesystem: { command: 'npx', args: [...] }
+  },
+  useServerManager: true
+});
+
+await agent.run(`
+  I need to access a PostgreSQL database.
+  Add a database server with this config: {...}
+  Then query the users table.
+`);
+```
+
+## Comparison: With vs Without ServerManager
+
+### Without ServerManager
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: { server1: {...}, server2: {...}, server3: {...} },
+  useServerManager: false  // Default
+});
+
+// All servers connected immediately
+// All tools available from the start
+// Higher memory usage
+// Simpler for small numbers of servers
+```
+
+### With ServerManager
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: { server1: {...}, server2: {...}, server3: {...} },
+  useServerManager: true
+});
+
+// No servers connected initially
+// Agent connects as needed
+// Lower memory usage
+// Better for many servers or complex workflows
+// Adds management overhead (extra tool calls)
+```
+
+## Best Practices
+
+1. **Use for 3+ servers** - Overhead not worth it for 1-2 servers
+2. **Prefetch when possible** - Reduces latency
+3. **Monitor state** - Log ServerManager state for debugging
+4. **Set higher maxSteps** - Management requires extra steps
+5. **Clear instructions** - Tell the agent when to switch servers
+
+## Troubleshooting
+
+### Agent doesn't connect to servers
+
+Increase maxSteps:
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai/gpt-4o',
+  mcpServers: {...},
+  useServerManager: true,
+  maxSteps: 20  // More steps for management
+});
+```
+
+### Tools not available after connection
+
+Check that server is both connected AND acquired:
+```typescript
+// Agent must call BOTH:
+// 1. connect_mcp_server({ serverName: "..." })
+// 2. acquire_active_mcp_server({ serverName: "..." })
+```
+
+### Agent keeps switching servers
+
+Provide clearer instructions:
+```typescript
+await agent.run(`
+  Use ONLY the filesystem server for this task.
+  Do not switch to other servers.
+  Steps: ...
+`);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/typescript/agent/basic-usage">
+    Learn core agent operations
+  </Card>
+  <Card title="Streaming" icon="broadcast-tower" href="/typescript/agent/streaming">
+    Real-time agent execution
+  </Card>
+  <Card title="Memory Management" icon="brain" href="/typescript/agent/memory">
+    Conversation history
+  </Card>
+  <Card title="Agent Overview" icon="robot" href="/typescript/agent/overview">
+    Back to overview
+  </Card>
+</CardGroup>

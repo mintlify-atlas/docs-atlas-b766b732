@@ -1,0 +1,163 @@
+---
+title: "Client API Reference"
+description: "Complete MCPClient API documentation"
+icon: "book"
+---
+
+## MCPClient
+
+Main class for connecting to MCP servers.
+
+### Constructor
+
+```python
+MCPClient(
+    config: str | dict[str, Any] | None = None,
+    allowed_servers: list[str] | None = None,
+    sandbox: bool = False,
+    sandbox_options: SandboxOptions | None = None,
+    sampling_callback: SamplingFnT | None = None,
+    elicitation_callback: ElicitationFnT | None = None,
+    message_handler: MessageHandlerFnT | None = None,
+    logging_callback: LoggingFnT | None = None,
+    middleware: list[Middleware] | None = None,
+    roots: list[Root] | None = None,
+    list_roots_callback: ListRootsFnT | None = None,
+    code_mode: bool = False,
+    verify: bool | None = True
+)
+```
+
+<ParamField path="config" type="str | dict">
+  Configuration dict or file path
+</ParamField>
+
+<ParamField path="sandbox" type="bool" default="False">
+  Enable sandboxed execution
+</ParamField>
+
+<ParamField path="code_mode" type="bool" default="False">
+  Enable code execution mode
+</ParamField>
+
+<ParamField path="verify" type="bool" default="True">
+  Verify SSL certificates
+</ParamField>
+
+### Class Methods
+
+#### from_dict()
+
+```python
+MCPClient.from_dict(
+    config: dict[str, Any],
+    sandbox: bool = False,
+    sandbox_options: SandboxOptions | None = None,
+    code_mode: bool = False,
+    verify: bool | None = True
+) -> MCPClient
+```
+
+Create client from dictionary.
+
+#### from_config_file()
+
+```python
+MCPClient.from_config_file(
+    filepath: str,
+    sandbox: bool = False,
+    sandbox_options: SandboxOptions | None = None,
+    code_mode: bool = False,
+    verify: bool | None = True
+) -> MCPClient
+```
+
+Create client from configuration file.
+
+### Instance Methods
+
+#### create_session()
+
+```python
+async def create_session(
+    server_name: str,
+    auto_initialize: bool = True
+) -> MCPSession | None
+```
+
+Create a session for a specific server.
+
+#### create_all_sessions()
+
+```python
+async def create_all_sessions(
+    auto_initialize: bool = True
+) -> dict[str, MCPSession]
+```
+
+Create sessions for all configured servers.
+
+#### get_session()
+
+```python
+def get_session(server_name: str) -> MCPSession
+```
+
+Get an existing session.
+
+#### close_session()
+
+```python
+async def close_session(server_name: str) -> None
+```
+
+Close a specific session.
+
+#### close_all_sessions()
+
+```python
+async def close_all_sessions() -> None
+```
+
+Close all sessions.
+
+#### add_server()
+
+```python
+def add_server(
+    name: str,
+    server_config: dict[str, Any]
+) -> None
+```
+
+Add a server configuration.
+
+#### remove_server()
+
+```python
+def remove_server(name: str) -> None
+```
+
+Remove a server configuration.
+
+#### execute_code()
+
+```python
+async def execute_code(
+    code: str,
+    timeout: float = 30.0
+) -> dict[str, Any]
+```
+
+Execute Python code with tool access (code mode).
+
+#### search_tools()
+
+```python
+async def search_tools(
+    query: str = "",
+    detail_level: str = "full"
+) -> dict[str, Any]
+```
+
+Search available MCP tools across all active sessions.

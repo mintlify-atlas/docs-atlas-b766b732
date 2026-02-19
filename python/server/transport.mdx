@@ -1,0 +1,409 @@
+---
+title: "Server Transport"
+description: "Configure transport protocols for your MCP server"
+icon: "network-wired"
+---
+
+## Transport Overview
+
+MCP servers in mcp-use support multiple transport protocols for different deployment scenarios:
+
+- **Stdio**: Process-based communication for command-line tools
+- **Streamable HTTP**: HTTP-based streaming for web integrations
+- **SSE**: Server-Sent Events for real-time updates
+
+## Stdio Transport
+
+Stdio transport uses standard input/output for communication, ideal for command-line tools and subprocess integration.
+
+### Running with Stdio
+
+```python server.py
+from mcp_use import MCPServer
+
+server = MCPServer(name="cli-server")
+
+@server.tool()
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+if __name__ == "__main__":
+    server.run(transport="stdio")
+```
+
+### Using Stdio Servers
+
+Configure clients to connect via stdio:
+
+```json config.json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "python",
+      "args": ["server.py"],
+      "env": {
+        "PYTHONPATH": "/path/to/project"
+      }
+    }
+  }
+}
+```
+
+```python client.py
+from mcp_use import MCPClient, MCPAgent
+from langchain_openai import ChatOpenAI
+
+client = MCPClient.from_config_file("config.json")
+llm = ChatOpenAI(model="gpt-4o")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+### Stdio Benefits
+
+- **Simple deployment**: No network configuration needed
+- **Process isolation**: Each client gets its own server process
+- **Automatic lifecycle**: Process starts/stops with connection
+- **No port conflicts**: No need to manage ports
+
+## Streamable HTTP Transport
+
+HTTP transport provides web-based access with streaming support, ideal for web applications and remote access.
+
+### Running with HTTP
+
+```python server.py
+from mcp_use import MCPServer
+
+server = MCPServer(
+    name="web-server",
+    debug=True  # Enable /docs, /inspector endpoints
+)
+
+@server.tool()
+async def fetch_data(url: str) -> str:
+    """Fetch data from URL"""
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.text
+
+if __name__ == "__main__":
+    server.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=8000,
+        reload=True  # Auto-reload on code changes
+    )
+```
+
+### Connecting to HTTP Servers
+
+```json config.json
+{
+  "mcpServers": {
+    "web-server": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+```python client.py
+from mcp_use import MCPClient
+
+client = MCPClient.from_config_file("config.json")
+await client.create_all_sessions()
+
+session = client.get_session("web-server")
+result = await session.call_tool("fetch_data", {"url": "https://example.com"})
+```
+
+### HTTP Configuration
+
+<ParamField path="host" type="str" default="0.0.0.0">
+  Host to bind the server to
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  Port to listen on
+</ParamField>
+
+<ParamField path="reload" type="bool" default="False">
+  Enable auto-reload on code changes (development)
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  Enable debug endpoints (/docs, /inspector)
+</ParamField>
+
+### HTTP Benefits
+
+- **Remote access**: Connect from anywhere
+- **Multiple clients**: Share one server instance
+- **Web integration**: Easy to integrate with web apps
+- **Debug tools**: Built-in inspector and documentation
+
+## SSE Transport
+
+Server-Sent Events provide one-way streaming from server to client.
+
+```python
+server.run(
+    transport="sse",
+    host="0.0.0.0",
+    port=8000
+)
+```
+
+## Custom Paths
+
+Customize endpoint paths for your deployment:
+
+```python
+server = MCPServer(
+    name="custom-server",
+    mcp_path="/api/mcp",
+    docs_path="/api/docs",
+    inspector_path="/api/inspector",
+    openmcp_path="/api/openmcp.json"
+)
+
+server.run(transport="streamable-http", port=8000)
+```
+
+Endpoints become:
+- `http://localhost:8000/api/mcp`
+- `http://localhost:8000/api/docs`
+- `http://localhost:8000/api/inspector`
+- `http://localhost:8000/api/openmcp.json`
+
+## CORS Configuration
+
+For web applications, configure CORS:
+
+```python
+from mcp_use import MCPServer
+from starlette.middleware.cors import CORSMiddleware
+
+server = MCPServer(name="api-server")
+
+# Get the underlying ASGI app and add CORS
+app = server.streamable_http_app()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://your-app.com"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+if __name__ == "__main__":
+    server.run(transport="streamable-http", port=8000)
+```
+
+## DNS Rebinding Protection
+
+Enable DNS rebinding protection for local development:
+
+```python
+server = MCPServer(
+    name="secure-server",
+    dns_rebinding_protection=True  # Only accept localhost connections
+)
+
+server.run(
+    transport="streamable-http",
+    host="127.0.0.1",
+    port=8000
+)
+```
+
+This restricts connections to localhost origins only, preventing DNS rebinding attacks.
+
+## SSL/TLS Configuration
+
+For production deployments, use a reverse proxy (nginx, caddy) to handle TLS:
+
+```nginx nginx.conf
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location /mcp {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+## Health Checks
+
+Implement health check endpoints:
+
+```python
+from mcp_use import MCPServer
+
+server = MCPServer(name="monitored-server")
+
+@server.custom_route("/health", methods=["GET"])
+async def health_check(request):
+    """Health check endpoint"""
+    return {"status": "healthy", "version": "1.0.0"}
+
+@server.custom_route("/ready", methods=["GET"])
+async def readiness_check(request):
+    """Readiness check endpoint"""
+    # Check if all dependencies are ready
+    db_ready = check_database()
+    cache_ready = check_cache()
+    
+    if db_ready and cache_ready:
+        return {"status": "ready"}
+    else:
+        return {"status": "not ready"}, 503
+
+server.run(transport="streamable-http", port=8000)
+```
+
+## Production Deployment
+
+### Using uvicorn
+
+```python
+from mcp_use import MCPServer
+import uvicorn
+
+server = MCPServer(name="prod-server")
+
+if __name__ == "__main__":
+    uvicorn.run(
+        server.app,
+        host="0.0.0.0",
+        port=8000,
+        workers=4,  # Multiple worker processes
+        log_level="info"
+    )
+```
+
+### Using gunicorn
+
+```bash
+gunicorn server:server.app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000
+```
+
+### Docker Deployment
+
+```dockerfile Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["python", "server.py"]
+```
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - LOG_LEVEL=info
+    restart: unless-stopped
+```
+
+## Load Balancing
+
+For high availability, use multiple server instances:
+
+```python
+# Server instance
+server = MCPServer(name="lb-server")
+server.run(transport="streamable-http", port=8000)
+```
+
+```nginx nginx.conf
+upstream mcp_backend {
+    least_conn;
+    server localhost:8001;
+    server localhost:8002;
+    server localhost:8003;
+}
+
+server {
+    listen 80;
+    
+    location /mcp {
+        proxy_pass http://mcp_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+## Monitoring and Logging
+
+Configure logging levels:
+
+```python
+import logging
+from mcp_use import MCPServer
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+server = MCPServer(
+    name="monitored-server",
+    pretty_print_jsonrpc=True  # Pretty print JSON-RPC logs
+)
+
+server.run(transport="streamable-http", port=8000)
+```
+
+### Debug Levels
+
+```bash
+# Production (clean logs only)
+DEBUG=0 python server.py
+
+# Development (clean logs + dev routes)
+DEBUG=1 python server.py
+
+# Full debug (clean logs + dev routes + JSON-RPC logging)
+DEBUG=2 python server.py
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Client Overview" icon="plug" href="/python/client/overview">
+    Learn about the MCP client
+  </Card>
+  <Card title="Server API" icon="book" href="/python/api/server">
+    Complete server API reference
+  </Card>
+</CardGroup>

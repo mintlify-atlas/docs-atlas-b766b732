@@ -1,0 +1,723 @@
+---
+title: 'Integrating with Claude'
+description: 'Connect your MCP servers to Claude Desktop and Claude.ai'
+icon: 'brain'
+---
+
+## Overview
+
+Claude provides native support for the Model Context Protocol, allowing seamless integration with your MCP servers. This enables Claude to access your custom tools, data sources, and capabilities during conversations.
+
+<Info>
+  Claude supports both local MCP servers (via Claude Desktop) and remote servers (via HTTPS).
+</Info>
+
+## Integration Methods
+
+<CardGroup cols={2}>
+  <Card title="Claude Desktop" icon="desktop">
+    Native MCP support with local and remote server connections
+  </Card>
+  <Card title="Claude.ai" icon="globe">
+    Web-based access to remote MCP servers
+  </Card>
+  <Card title="Claude API" icon="code">
+    Programmatic access with MCP client SDK
+  </Card>
+  <Card title="Claude for Work" icon="building">
+    Enterprise deployment with team-wide MCP servers
+  </Card>
+</CardGroup>
+
+## Claude Desktop Integration
+
+### Prerequisites
+
+- **Claude Desktop** installed ([download here](https://claude.ai/download))
+- **MCP Server** deployed and accessible
+- **Configuration file** access on your system
+
+### Configuration
+
+<Tabs>
+  <Tab title="macOS">
+    Edit Claude Desktop configuration:
+    
+    ```bash
+    # Open configuration file
+    nano ~/Library/Application\ Support/Claude/claude_desktop_config.json
+    ```
+    
+    Add your MCP server:
+    
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "url": "https://your-server.run.mcp-use.com/mcp"
+        }
+      }
+    }
+    ```
+    
+    Restart Claude Desktop to apply changes.
+  </Tab>
+  
+  <Tab title="Windows">
+    Edit configuration file:
+    
+    ```powershell
+    # Open configuration file
+    notepad %APPDATA%\Claude\claude_desktop_config.json
+    ```
+    
+    Add your MCP server:
+    
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "url": "https://your-server.run.mcp-use.com/mcp"
+        }
+      }
+    }
+    ```
+    
+    Restart Claude Desktop.
+  </Tab>
+  
+  <Tab title="Linux">
+    Edit configuration:
+    
+    ```bash
+    # Open configuration file
+    nano ~/.config/Claude/claude_desktop_config.json
+    ```
+    
+    Add your MCP server:
+    
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "url": "https://your-server.run.mcp-use.com/mcp"
+        }
+      }
+    }
+    ```
+    
+    Restart Claude Desktop.
+  </Tab>
+</Tabs>
+
+### Local MCP Servers
+
+Claude Desktop can also connect to locally running servers:
+
+<Tabs>
+  <Tab title="HTTP Endpoint">
+    ```json
+    {
+      "mcpServers": {
+        "local-dev-server": {
+          "url": "http://localhost:3000/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="STDIO Connection">
+    ```json
+    {
+      "mcpServers": {
+        "filesystem-server": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/you/Documents"]
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Multiple Servers
+
+Configure multiple MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "url": "https://weather-server.run.mcp-use.com/mcp"
+    },
+    "database": {
+      "url": "https://db-server.run.mcp-use.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/Documents"]
+    }
+  }
+}
+```
+
+## Authentication
+
+### API Token Authentication
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "url": "https://your-server.run.mcp-use.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_TOKEN"
+      }
+    }
+  }
+}
+```
+
+### Custom Headers
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "url": "https://your-server.run.mcp-use.com/mcp",
+      "headers": {
+        "X-API-Key": "your-api-key",
+        "X-Client-Version": "1.0.0"
+      }
+    }
+  }
+}
+```
+
+### OAuth Integration
+
+For OAuth-protected servers, implement OAuth flow in your MCP server:
+
+```typescript
+import { MCPServer } from "mcp-use/server";
+import { WorkOSAuth } from "mcp-use/auth";
+
+const server = new MCPServer({
+  name: "oauth-server",
+  version: "1.0.0",
+  oauth: new WorkOSAuth({
+    clientId: process.env.WORKOS_CLIENT_ID!,
+    apiKey: process.env.WORKOS_API_KEY!,
+    redirectUri: "https://your-server.run.mcp-use.com/oauth/callback"
+  })
+});
+```
+
+Claude Desktop will handle the OAuth flow automatically.
+
+## Server Configuration
+
+### CORS for Claude
+
+Configure CORS to allow Claude Desktop:
+
+```typescript
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  name: "my-server",
+  version: "1.0.0",
+  cors: {
+    origin: [
+      "https://claude.ai",
+      "https://api.claude.ai",
+      // Allow Claude Desktop (custom protocol)
+      /^claude:\/\//
+    ],
+    credentials: true
+  }
+});
+```
+
+### Server Metadata
+
+Provide rich metadata for better Claude integration:
+
+```typescript
+const server = new MCPServer({
+  name: "weather-tools",
+  version: "1.0.0",
+  description: "Comprehensive weather information and forecasts",
+  instructions: `
+    This server provides weather tools. Use get_weather for current conditions
+    and get_forecast for multi-day forecasts. Always specify the city name clearly.
+  `,
+  capabilities: {
+    tools: true,
+    resources: true,
+    prompts: false
+  }
+});
+```
+
+## Creating Claude-Optimized Tools
+
+### Tool Design
+
+Design tools specifically for Claude's capabilities:
+
+```typescript
+import { MCPServer, text } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "research-tools",
+  version: "1.0.0"
+});
+
+// Clear, descriptive tool names and descriptions
+server.tool({
+  name: "search_academic_papers",
+  description: `
+    Search for academic papers and research publications.
+    Use this when the user asks about scientific research, studies, or academic topics.
+    Returns paper titles, authors, abstracts, and publication details.
+  `,
+  schema: z.object({
+    query: z.string().describe("Search query for academic papers"),
+    year_from: z.number().optional().describe("Filter papers from this year onwards"),
+    year_to: z.number().optional().describe("Filter papers up to this year"),
+    limit: z.number().default(10).describe("Maximum number of results")
+  })
+}, async ({ query, year_from, year_to, limit }) => {
+  const papers = await searchPapers(query, { year_from, year_to, limit });
+  
+  return text(`
+    Found ${papers.length} papers:
+    
+    ${papers.map(p => `
+      Title: ${p.title}
+      Authors: ${p.authors.join(", ")}
+      Year: ${p.year}
+      Abstract: ${p.abstract.substring(0, 200)}...
+      DOI: ${p.doi}
+    `).join("\n\n")}
+  `);
+});
+```
+
+### Rich Responses
+
+Provide structured, informative responses:
+
+```typescript
+server.tool({
+  name: "analyze_code",
+  description: "Analyze code for quality, security, and best practices",
+  schema: z.object({
+    code: z.string(),
+    language: z.string()
+  })
+}, async ({ code, language }) => {
+  const analysis = await analyzeCode(code, language);
+  
+  return text(`
+    # Code Analysis Results
+    
+    ## Summary
+    - Language: ${language}
+    - Lines of code: ${analysis.loc}
+    - Complexity: ${analysis.complexity}
+    
+    ## Quality Score: ${analysis.score}/100
+    
+    ## Issues Found
+    ${analysis.issues.map(i => `
+    ### ${i.severity}: ${i.title}
+    Location: Line ${i.line}
+    ${i.description}
+    
+    Suggestion: ${i.suggestion}
+    `).join("\n")}
+    
+    ## Best Practices
+    ${analysis.recommendations.map(r => `- ${r}`).join("\n")}
+  `);
+});
+```
+
+## Using Resources
+
+Provide data sources that Claude can access:
+
+```typescript
+import { resource } from "mcp-use/server";
+
+// Dynamic resource
+server.resource({
+  uri: "docs://api/reference",
+  name: "API Reference",
+  description: "Complete API documentation",
+  mimeType: "text/markdown"
+}, async () => {
+  const docs = await loadAPIDocs();
+  return resource(docs, "text/markdown");
+});
+
+// Static resource
+server.resource({
+  uri: "data://metrics/daily",
+  name: "Daily Metrics",
+  description: "Today's system metrics",
+  mimeType: "application/json"
+}, async () => {
+  const metrics = await getDailyMetrics();
+  return resource(JSON.stringify(metrics, null, 2), "application/json");
+});
+```
+
+## Prompt Templates
+
+Create reusable prompt templates:
+
+```typescript
+server.prompt({
+  name: "code_review",
+  description: "Generate a comprehensive code review",
+  arguments: [
+    {
+      name: "code",
+      description: "Code to review",
+      required: true
+    },
+    {
+      name: "language",
+      description: "Programming language",
+      required: true
+    }
+  ]
+}, async ({ code, language }) => {
+  return {
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `
+            Please review the following ${language} code:
+            
+            \`\`\`${language}
+            ${code}
+            \`\`\`
+            
+            Provide:
+            1. Code quality assessment
+            2. Security concerns
+            3. Performance considerations
+            4. Best practice recommendations
+            5. Suggested improvements
+          `
+        }
+      }
+    ]
+  };
+});
+```
+
+## Testing Integration
+
+### Local Testing
+
+<Steps>
+  <Step title="Start Development Server">
+    ```bash
+    npx mcp-use dev
+    ```
+    
+    Your server runs on `http://localhost:3000/mcp`
+  </Step>
+  
+  <Step title="Configure Claude Desktop">
+    Add local server to configuration:
+    
+    ```json
+    {
+      "mcpServers": {
+        "dev-server": {
+          "url": "http://localhost:3000/mcp"
+        }
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Test in Claude">
+    Open Claude Desktop and start a conversation:
+    
+    ```
+    Can you list the available tools from my dev-server?
+    ```
+    
+    Claude will show your configured tools and allow you to test them.
+  </Step>
+</Steps>
+
+### Production Testing
+
+<Steps>
+  <Step title="Deploy Server">
+    ```bash
+    npx mcp-use deploy
+    # Note the deployment URL
+    ```
+  </Step>
+  
+  <Step title="Update Configuration">
+    ```json
+    {
+      "mcpServers": {
+        "prod-server": {
+          "url": "https://your-server.run.mcp-use.com/mcp"
+        }
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Test Tools">
+    Use Claude to test each tool:
+    
+    ```
+    Please test the get_weather tool for Tokyo.
+    ```
+  </Step>
+</Steps>
+
+## Advanced Features
+
+### Sampling (LLM Delegation)
+
+Allow your MCP server to request Claude's help:
+
+```typescript
+server.tool({
+  name: "analyze_sentiment",
+  description: "Analyze sentiment of text using Claude",
+  schema: z.object({ text: z.string() })
+}, async ({ text }, context) => {
+  // Request Claude to analyze sentiment
+  const result = await context.sampling.createMessage({
+    messages: [{
+      role: "user",
+      content: `Analyze the sentiment of this text: "${text}"`
+    }],
+    maxTokens: 100
+  });
+  
+  return text(result.content[0].text);
+});
+```
+
+### Progress Notifications
+
+Send progress updates during long operations:
+
+```typescript
+server.tool({
+  name: "process_large_dataset",
+  description: "Process a large dataset",
+  schema: z.object({ datasetId: z.string() })
+}, async ({ datasetId }, context) => {
+  const dataset = await loadDataset(datasetId);
+  const totalRecords = dataset.length;
+  
+  for (let i = 0; i < totalRecords; i++) {
+    await processRecord(dataset[i]);
+    
+    // Send progress notification
+    if (i % 100 === 0) {
+      await context.notification.progress({
+        message: `Processed ${i}/${totalRecords} records`,
+        progress: i / totalRecords
+      });
+    }
+  }
+  
+  return text(`Successfully processed ${totalRecords} records`);
+});
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server Not Appearing in Claude">
+    **Problem**: MCP server doesn't show up in Claude Desktop
+    
+    **Solution**:
+    1. Verify configuration file syntax is valid JSON
+    2. Check server URL is accessible: `curl https://your-server.run.mcp-use.com/mcp`
+    3. Restart Claude Desktop completely
+    4. Check Claude Desktop logs:
+       - macOS: `~/Library/Logs/Claude/`
+       - Windows: `%APPDATA%\Claude\logs\`
+       - Linux: `~/.config/Claude/logs/`
+  </Accordion>
+  
+  <Accordion title="Authentication Errors">
+    **Problem**: Claude cannot authenticate with server
+    
+    **Solution**:
+    - Verify authentication headers are correct
+    - Test authentication with cURL:
+      ```bash
+      curl -H "Authorization: Bearer YOUR_TOKEN" \
+        https://your-server.run.mcp-use.com/mcp
+      ```
+    - Check server logs for authentication errors
+    - Ensure OAuth callback URL is correct
+  </Accordion>
+  
+  <Accordion title="Tools Not Working">
+    **Problem**: Claude sees tools but they fail when called
+    
+    **Solution**:
+    - Check tool implementation for errors
+    - Verify tool schema matches arguments
+    - Test tools with Inspector first
+    - Check server logs for error details
+    - Ensure all required environment variables are set
+  </Accordion>
+  
+  <Accordion title="Connection Timeouts">
+    **Problem**: Requests to server timeout
+    
+    **Solution**:
+    - Optimize slow tool implementations
+    - Implement streaming for long operations
+    - Increase server timeout settings
+    - Use progress notifications for long tasks
+    - Check network connectivity and firewall rules
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Check>
+  **Provide clear tool descriptions** that explain when and how to use each tool
+</Check>
+
+<Check>
+  **Use descriptive parameter names** with detailed descriptions
+</Check>
+
+<Check>
+  **Return well-formatted responses** using markdown for readability
+</Check>
+
+<Check>
+  **Implement proper error handling** with helpful error messages
+</Check>
+
+<Check>
+  **Test thoroughly** before deploying to production
+</Check>
+
+<Check>
+  **Use sampling wisely** - only delegate to Claude when it adds value
+</Check>
+
+<Check>
+  **Send progress notifications** for operations taking more than a few seconds
+</Check>
+
+<Check>
+  **Document your tools** in server description and instructions
+</Check>
+
+## Example: Complete Integration
+
+```typescript
+import { MCPServer, text, resource } from "mcp-use/server";
+import { z } from "zod";
+
+const server = new MCPServer({
+  name: "research-assistant",
+  version: "1.0.0",
+  description: "Research tools for academic and professional work",
+  instructions: `
+    This server provides tools for research assistance:
+    - search_papers: Find academic papers
+    - summarize_paper: Get paper summaries
+    - cite_paper: Generate citations
+    Use these tools when users ask about research topics.
+  `
+});
+
+// Tool: Search papers
+server.tool({
+  name: "search_papers",
+  description: "Search for academic papers by topic",
+  schema: z.object({
+    query: z.string().describe("Research topic or keywords"),
+    limit: z.number().default(5)
+  })
+}, async ({ query, limit }) => {
+  const papers = await searchAcademicPapers(query, limit);
+  return text(`Found ${papers.length} papers:\n\n${formatPapers(papers)}`);
+});
+
+// Tool: Summarize paper
+server.tool({
+  name: "summarize_paper",
+  description: "Get a summary of a research paper",
+  schema: z.object({
+    doi: z.string().describe("DOI of the paper")
+  })
+}, async ({ doi }, context) => {
+  const paper = await fetchPaper(doi);
+  
+  // Use Claude's sampling for summarization
+  const summary = await context.sampling.createMessage({
+    messages: [{
+      role: "user",
+      content: `Summarize this research paper:\n\n${paper.abstract}`
+    }],
+    maxTokens: 200
+  });
+  
+  return text(summary.content[0].text);
+});
+
+// Resource: Recent papers
+server.resource({
+  uri: "papers://recent",
+  name: "Recent Papers",
+  description: "Recently published papers in your field"
+}, async () => {
+  const papers = await getRecentPapers();
+  return resource(formatPapersAsMarkdown(papers), "text/markdown");
+});
+
+await server.listen(3000);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integrate with ChatGPT" icon="message" href="/deployment/chatgpt">
+    Connect to ChatGPT
+  </Card>
+  <Card title="Custom Clients" icon="plug" href="/deployment/custom-clients">
+    Build custom MCP clients
+  </Card>
+  <Card title="Advanced Tools" icon="wrench" href="/guides/tools">
+    Learn advanced tool patterns
+  </Card>
+  <Card title="OAuth Setup" icon="lock" href="/guides/authentication">
+    Implement OAuth authentication
+  </Card>
+</CardGroup>

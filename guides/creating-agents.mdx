@@ -1,0 +1,933 @@
+---
+title: "Creating AI Agents"
+description: "Build intelligent AI agents that connect to MCP servers and use tools"
+icon: "robot"
+---
+
+## What are MCP Agents?
+
+**MCP Agents** are AI-powered assistants that can reason, plan, and execute actions using tools from MCP servers. They combine Large Language Models (LLMs) with MCP tools to accomplish complex, multi-step tasks.
+
+<CardGroup cols={2}>
+  <Card title="Autonomous" icon="brain">
+    Agents reason about tasks and decide which tools to use
+  </Card>
+  <Card title="Tool-Enabled" icon="wrench">
+    Access to any MCP server's tools, resources, and prompts
+  </Card>
+  <Card title="Multi-Step" icon="list-check">
+    Execute complex workflows across multiple tools
+  </Card>
+  <Card title="LLM-Agnostic" icon="shuffle">
+    Works with OpenAI, Anthropic, Groq, and more
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+
+### Installation
+
+```bash
+npm install mcp-use @langchain/openai langchain
+```
+
+### Basic Agent
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+import { MCPAgent, MCPClient } from "mcp-use";
+import "dotenv/config";
+
+async function main() {
+  // 1. Configure MCP servers
+  const config = {
+    mcpServers: {
+      filesystem: {
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      },
+    },
+  };
+
+  // 2. Create client
+  const client = MCPClient.fromDict(config);
+
+  // 3. Create LLM
+  const llm = new ChatOpenAI({ modelName: "gpt-4o" });
+
+  // 4. Create agent
+  const agent = new MCPAgent({ llm, client, maxSteps: 20 });
+
+  // 5. Run a query
+  const result = await agent.run("List all files in /tmp and summarize them");
+  console.log(result);
+}
+
+main();
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+### Installation
+
+```bash
+pip install mcp-use langchain-openai
+```
+
+### Basic Agent
+
+```python
+import asyncio
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+async def main():
+    load_dotenv()
+    
+    # 1. Configure MCP servers
+    config = {
+        "mcpServers": {
+            "filesystem": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            }
+        }
+    }
+    
+    # 2. Create client
+    client = MCPClient.from_dict(config)
+    
+    # 3. Create LLM
+    llm = ChatOpenAI(model="gpt-4o")
+    
+    # 4. Create agent
+    agent = MCPAgent(llm=llm, client=client, max_steps=20)
+    
+    # 5. Run a query
+    result = await agent.run("List all files in /tmp and summarize them")
+    print(result)
+    
+    # Clean up
+    await client.close_all_sessions()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+  </Tab>
+</Tabs>
+
+## Agent Execution Modes
+
+MCPAgent supports three execution modes for different use cases:
+
+### 1. Simple Run (Blocking)
+
+Best for simple queries where you only need the final result:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const result = await agent.run("Search for restaurants in Tokyo");
+console.log(result);
+// Output: "I found 10 highly-rated restaurants in Tokyo..."
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+result = await agent.run("Search for restaurants in Tokyo")
+print(result)
+# Output: "I found 10 highly-rated restaurants in Tokyo..."
+```
+
+  </Tab>
+</Tabs>
+
+### 2. Streaming Steps
+
+Best for debugging and understanding the agent's reasoning:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const stream = agent.stream("Find a restaurant and book a table");
+
+for await (const step of stream) {
+  console.log(`\n--- Step ${step.step} ---`);
+  console.log(`Tool: ${step.action.tool}`);
+  console.log(`Input:`, step.action.toolInput);
+  console.log(`Result:`, step.observation);
+}
+// Final result is the return value
+```
+
+Output:
+```
+--- Step 1 ---
+Tool: search_restaurants
+Input: { city: "Tokyo", cuisine: "Japanese" }
+Result: Found 5 restaurants...
+
+--- Step 2 ---
+Tool: check_availability
+Input: { restaurant: "Sushi Master", date: "2024-01-15" }
+Result: Available times: 18:00, 19:00, 20:00...
+
+--- Step 3 ---
+Tool: book_table
+Input: { restaurant: "Sushi Master", time: "19:00", guests: 2 }
+Result: Booking confirmed!
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+async for step in agent.stream("Find a restaurant and book a table"):
+    print(f"\n--- Step {step['step']} ---")
+    print(f"Tool: {step['action']['tool']}")
+    print(f"Input: {step['action']['toolInput']}")
+    print(f"Result: {step['observation']}")
+```
+
+  </Tab>
+</Tabs>
+
+### 3. Stream Events (Token-Level)
+
+Best for real-time UIs with token-by-token streaming:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const eventStream = agent.streamEvents("What's the weather today?");
+
+for await (const event of eventStream) {
+  switch (event.event) {
+    case "on_chat_model_stream":
+      // Token-by-token streaming from LLM
+      if (event.data?.chunk?.content) {
+        process.stdout.write(event.data.chunk.content);
+      }
+      break;
+
+    case "on_tool_start":
+      console.log(`\n🔧 Starting tool: ${event.name}`);
+      break;
+
+    case "on_tool_end":
+      console.log(`✅ Tool completed: ${event.name}`);
+      break;
+
+    case "on_chain_end":
+      console.log("\n🏁 Agent finished");
+      break;
+  }
+}
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+# Python uses the simpler stream() method
+# For token-level streaming, use with streaming callbacks
+```
+
+  </Tab>
+</Tabs>
+
+## LLM Providers
+
+MCPAgent works with any LangChain-compatible LLM:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+<CodeGroup>
+
+```typescript OpenAI
+import { ChatOpenAI } from "@langchain/openai";
+
+const llm = new ChatOpenAI({
+  modelName: "gpt-4o",
+  temperature: 0,
+});
+
+const agent = new MCPAgent({ llm, client });
+```
+
+```typescript Anthropic
+import { ChatAnthropic } from "@langchain/anthropic";
+
+const llm = new ChatAnthropic({
+  model: "claude-sonnet-4-20250514",
+  temperature: 0,
+});
+
+const agent = new MCPAgent({ llm, client });
+```
+
+```typescript Groq
+import { ChatGroq } from "@langchain/groq";
+
+const llm = new ChatGroq({
+  model: "llama3-70b-8192",
+  temperature: 0,
+});
+
+const agent = new MCPAgent({ llm, client });
+```
+
+```typescript Ollama (Local)
+import { ChatOllama } from "@langchain/ollama";
+
+const llm = new ChatOllama({
+  model: "llama2",
+  baseUrl: "http://localhost:11434",
+});
+
+const agent = new MCPAgent({ llm, client });
+```
+
+</CodeGroup>
+
+  </Tab>
+  
+  <Tab title="Python">
+
+<CodeGroup>
+
+```python OpenAI
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Anthropic
+from langchain_anthropic import ChatAnthropic
+
+llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=0)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Groq
+from langchain_groq import ChatGroq
+
+llm = ChatGroq(model="llama3-70b-8192", temperature=0)
+agent = MCPAgent(llm=llm, client=client)
+```
+
+```python Ollama (Local)
+from langchain_ollama import ChatOllama
+
+llm = ChatOllama(model="llama2")
+agent = MCPAgent(llm=llm, client=client)
+```
+
+</CodeGroup>
+
+  </Tab>
+</Tabs>
+
+<Warning>
+  Only models with **tool calling capabilities** can be used with MCPAgent. Ensure your chosen model supports function calling.
+</Warning>
+
+## Multi-Server Agents
+
+Connect to multiple MCP servers for more capabilities:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const config = {
+  mcpServers: {
+    filesystem: {
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    },
+    playwright: {
+      command: "npx",
+      args: ["@playwright/mcp@latest"],
+    },
+    airbnb: {
+      command: "npx",
+      args: ["-y", "@openbnb/mcp-server-airbnb"],
+    },
+  },
+};
+
+const client = MCPClient.fromDict(config);
+const agent = new MCPAgent({ llm, client, maxSteps: 30 });
+
+// Agent can use tools from all three servers
+const result = await agent.run(
+  "Search for accommodations in Barcelona on Airbnb, " +
+  "then use Google to find nearby restaurants"
+);
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+config = {
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        },
+        "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"],
+        },
+        "airbnb": {
+            "command": "npx",
+            "args": ["-y", "@openbnb/mcp-server-airbnb"],
+        },
+    }
+}
+
+client = MCPClient.from_dict(config)
+agent = MCPAgent(llm=llm, client=client, max_steps=30)
+
+result = await agent.run(
+    "Search for accommodations in Barcelona on Airbnb, "
+    "then use Google to find nearby restaurants"
+)
+```
+
+  </Tab>
+</Tabs>
+
+### Dynamic Server Selection
+
+Enable smart server selection for better performance:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const agent = new MCPAgent({
+  llm,
+  client,
+  useServerManager: true,  // Enable smart server selection
+});
+
+// Agent automatically selects the right server for each tool
+// Reduces tool confusion and improves efficiency
+```
+
+When `useServerManager` is enabled:
+- Agent only sees relevant tools for each step
+- Reduces context window usage
+- Improves tool selection accuracy
+- Faster execution
+
+</Tab>
+  
+  <Tab title="Python">
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    use_server_manager=True,  # Enable smart server selection
+)
+
+# Agent intelligently chooses the right server for each tool
+```
+
+  </Tab>
+</Tabs>
+
+## Tool Access Control
+
+Restrict which tools the agent can access:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+const agent = new MCPAgent({
+  llm,
+  client,
+  disallowedTools: [
+    "delete_file",       // Dangerous operations
+    "execute_command",
+    "system_shutdown",
+  ],
+});
+
+// Agent cannot use restricted tools
+// Attempts to use them will be blocked
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    disallowed_tools=[
+        "delete_file",
+        "execute_command",
+        "system_shutdown",
+    ],
+)
+
+# Agent cannot access restricted tools
+```
+
+  </Tab>
+</Tabs>
+
+## Conversation Memory
+
+Add memory for multi-turn conversations:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+import { BufferMemory } from "langchain/memory";
+
+const memory = new BufferMemory({
+  returnMessages: true,
+  memoryKey: "chat_history",
+});
+
+const agent = new MCPAgent({
+  llm,
+  client,
+  memory,
+});
+
+// First query
+await agent.run("My name is Alice");
+// Agent: "Nice to meet you, Alice!"
+
+// Second query (remembers context)
+await agent.run("What's my name?");
+// Agent: "Your name is Alice!"
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+from langchain.memory import ConversationBufferMemory
+
+memory = ConversationBufferMemory(
+    return_messages=True,
+    memory_key="chat_history",
+)
+
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    memory=memory,
+)
+
+# First query
+await agent.run("My name is Alice")
+# Agent: "Nice to meet you, Alice!"
+
+# Second query (remembers context)
+await agent.run("What's my name?")
+# Agent: "Your name is Alice!"
+```
+
+  </Tab>
+</Tabs>
+
+## Observability
+
+Monitor agent performance with Langfuse:
+
+<Tabs>
+  <Tab title="TypeScript">
+
+### Setup
+
+```bash
+npm install langfuse langfuse-langchain
+```
+
+Create `.env`:
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-your-key
+LANGFUSE_SECRET_KEY=sk-lf-your-secret
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+### Usage
+
+```typescript
+const agent = new MCPAgent({
+  llm,
+  client,
+  observe: true,  // Enable observability
+});
+
+// Set custom metadata
+agent.setMetadata({
+  userId: "user123",
+  sessionId: "session456",
+  environment: "production",
+});
+
+// Set tags for organization
+agent.setTags(["production", "customer-support", "priority-high"]);
+
+// Run queries (automatically tracked)
+const result = await agent.run("Complex multi-step task");
+
+// View in Langfuse dashboard:
+// - Token usage
+// - Latency
+// - Tool calls
+// - Errors
+// - Cost
+```
+
+### Monitoring Events
+
+```typescript
+const eventStream = agent.streamEvents("Query");
+
+for await (const event of eventStream) {
+  switch (event.event) {
+    case "on_llm_start":
+      console.log("LLM call started:", event.data);
+      break;
+    case "on_tool_start":
+      console.log("Tool execution started:", event.name);
+      break;
+    case "on_tool_end":
+      console.log("Tool execution completed:", event.name);
+      break;
+  }
+}
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+Python observability support coming soon. For now, use LangChain's built-in callbacks.
+
+  </Tab>
+</Tabs>
+
+## Advanced Examples
+
+### Web Research Agent
+
+<Tabs>
+  <Tab title="TypeScript">
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+import { MCPAgent, MCPClient } from "mcp-use";
+
+async function webResearchAgent() {
+  const config = {
+    mcpServers: {
+      playwright: {
+        command: "npx",
+        args: ["@playwright/mcp@latest"],
+      },
+    },
+  };
+
+  const client = MCPClient.fromDict(config);
+  const llm = new ChatOpenAI({ modelName: "gpt-4o" });
+  const agent = new MCPAgent({ llm, client, maxSteps: 30 });
+
+  const result = await agent.run(`
+    Research the latest developments in quantum computing.
+    
+    Tasks:
+    1. Search for recent news articles
+    2. Find academic papers from 2024
+    3. Summarize the top 3 breakthroughs
+    4. Identify leading researchers in the field
+  `);
+
+  console.log(result);
+}
+
+webResearchAgent();
+```
+
+  </Tab>
+  
+  <Tab title="Python">
+
+```python
+import asyncio
+from langchain_openai import ChatOpenAI
+from mcp_use import MCPAgent, MCPClient
+
+async def web_research_agent():
+    config = {
+        "mcpServers": {
+            "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest"],
+            }
+        }
+    }
+    
+    client = MCPClient.from_dict(config)
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = MCPAgent(llm=llm, client=client, max_steps=30)
+    
+    result = await agent.run("""
+        Research the latest developments in quantum computing.
+        
+        Tasks:
+        1. Search for recent news articles
+        2. Find academic papers from 2024
+        3. Summarize the top 3 breakthroughs
+        4. Identify leading researchers in the field
+    """)
+    
+    print(result)
+    await client.close_all_sessions()
+
+asyncio.run(web_research_agent())
+```
+
+  </Tab>
+</Tabs>
+
+### Data Analysis Agent
+
+```typescript
+async function dataAnalysisAgent() {
+  const config = {
+    mcpServers: {
+      filesystem: {
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./data"],
+      },
+    },
+  };
+
+  const client = MCPClient.fromDict(config);
+  const llm = new ChatOpenAI({ modelName: "gpt-4o" });
+  const agent = new MCPAgent({ llm, client, maxSteps: 20 });
+
+  const result = await agent.run(`
+    Analyze the sales data in sales_2024.csv:
+    
+    1. Load and parse the CSV file
+    2. Calculate total revenue by month
+    3. Identify the top 5 products
+    4. Find any seasonal trends
+    5. Create a summary report
+  `);
+
+  console.log(result);
+}
+```
+
+### Travel Planning Agent
+
+```typescript
+async function travelPlanningAgent() {
+  const config = {
+    mcpServers: {
+      airbnb: {
+        command: "npx",
+        args: ["-y", "@openbnb/mcp-server-airbnb"],
+      },
+      playwright: {
+        command: "npx",
+        args: ["@playwright/mcp@latest"],
+      },
+    },
+  };
+
+  const client = MCPClient.fromDict(config);
+  const llm = new ChatOpenAI({ modelName: "gpt-4o" });
+  const agent = new MCPAgent({
+    llm,
+    client,
+    maxSteps: 50,
+    useServerManager: true,
+  });
+
+  const result = await agent.run(`
+    Plan a 5-day trip to Barcelona for 2 people:
+    
+    1. Find accommodations on Airbnb (budget: $150/night)
+    2. Research top attractions and restaurants
+    3. Create a day-by-day itinerary
+    4. Estimate total trip cost
+    5. Provide travel tips and recommendations
+  `);
+
+  console.log(result);
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set Appropriate Max Steps">
+    ```typescript
+    const agent = new MCPAgent({
+      llm,
+      client,
+      maxSteps: 20,  // Adjust based on task complexity
+    });
+    ```
+    
+    - Simple tasks: 5-10 steps
+    - Medium complexity: 10-20 steps
+    - Complex workflows: 20-50 steps
+    - Prevents infinite loops
+  </Accordion>
+  
+  <Accordion title="Use Specific Instructions">
+    ✅ **Good:**
+    ```
+    "Search Google for restaurants in Tokyo with ratings above 4.5,
+    then summarize the top 3 results"
+    ```
+    
+    ❌ **Bad:**
+    ```
+    "Find restaurants"
+    ```
+    
+    Clear instructions lead to better results.
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    ```typescript
+    try {
+      const result = await agent.run("Query");
+      console.log(result);
+    } catch (error) {
+      if (error.code === "MAX_STEPS_EXCEEDED") {
+        console.error("Agent took too many steps");
+      } else if (error.code === "TOOL_ERROR") {
+        console.error("Tool execution failed");
+      } else {
+        console.error("Unexpected error:", error);
+      }
+    } finally {
+      await client.closeAllSessions();
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitor Token Usage">
+    ```typescript
+    agent.setMetadata({ userId: "user123" });
+    agent.observe = true;
+    
+    const result = await agent.run("Query");
+    
+    // Check Langfuse dashboard for:
+    // - Token count
+    // - Cost
+    // - Latency
+    ```
+  </Accordion>
+  
+  <Accordion title="Test with Different LLMs">
+    Different LLMs have different strengths:
+    
+    - **GPT-4o**: Best overall, excellent tool calling
+    - **Claude Sonnet**: Great reasoning, good for complex tasks
+    - **GPT-3.5**: Fast, cost-effective for simple tasks
+    - **Llama 3**: Free, good for privacy-sensitive applications
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Agent Not Using Tools">
+    **Problem**: Agent returns answers without calling tools
+    
+    **Solutions**:
+    - Make instructions more explicit
+    - Verify tools are loaded: `await client.getTools()`
+    - Check LLM supports tool calling
+    - Increase temperature slightly (0.1-0.3)
+  </Accordion>
+  
+  <Accordion title="Agent Repeating Actions">
+    **Problem**: Agent calls same tool multiple times
+    
+    **Solutions**:
+    - Reduce maxSteps
+    - Make tool descriptions clearer
+    - Add explicit "stop" conditions in prompt
+    - Use streaming to detect loops early
+  </Accordion>
+  
+  <Accordion title="Hitting Max Steps">
+    **Problem**: Agent exceeds maximum steps
+    
+    **Solutions**:
+    - Break task into smaller subtasks
+    - Increase maxSteps if task is legitimately complex
+    - Simplify the query
+    - Check for tool errors causing retries
+  </Accordion>
+  
+  <Accordion title="Tool Call Failures">
+    **Problem**: Tools fail during execution
+    
+    **Solutions**:
+    - Verify server is running
+    - Check tool parameters
+    - Look at server logs
+    - Test tools directly in inspector
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build MCP Servers" icon="server" href="/guides/building-your-first-server">
+    Create custom MCP servers for your agents
+  </Card>
+  <Card title="Deploy Agents" icon="rocket" href="https://manufact.com">
+    Deploy agents to production with Manufact
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/mcp-use/mcp-use/tree/main/libraries/typescript/packages/mcp-use/examples">
+    Browse agent examples and templates
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Complete agent API documentation
+  </Card>
+</CardGroup>

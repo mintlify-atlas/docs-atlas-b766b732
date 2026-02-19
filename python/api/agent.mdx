@@ -1,0 +1,191 @@
+---
+title: "Agent API Reference"
+description: "Complete MCPAgent API documentation"
+icon: "book"
+---
+
+## MCPAgent
+
+AI agent that uses MCP tools to accomplish tasks.
+
+### Constructor
+
+```python
+MCPAgent(
+    llm: BaseLanguageModel | None = None,
+    client: MCPClient | None = None,
+    connectors: list[BaseConnector] | None = None,
+    max_steps: int = 5,
+    auto_initialize: bool = False,
+    memory_enabled: bool = True,
+    system_prompt: str | None = None,
+    system_prompt_template: str | None = None,
+    additional_instructions: str | None = None,
+    disallowed_tools: list[str] | None = None,
+    tools_used_names: list[str] | None = None,
+    use_server_manager: bool = False,
+    server_manager: BaseServerManager | None = None,
+    verbose: bool = False,
+    pretty_print: bool = False,
+    callbacks: list | None = None,
+    retry_on_error: bool = True
+)
+```
+
+<ParamField path="llm" type="BaseLanguageModel" required>
+  LangChain LLM with tool calling support
+</ParamField>
+
+<ParamField path="client" type="MCPClient">
+  MCPClient instance
+</ParamField>
+
+<ParamField path="connectors" type="list[BaseConnector]">
+  Alternative to client
+</ParamField>
+
+<ParamField path="max_steps" type="int" default="5">
+  Maximum reasoning steps
+</ParamField>
+
+<ParamField path="memory_enabled" type="bool" default="True">
+  Maintain conversation history
+</ParamField>
+
+<ParamField path="system_prompt" type="str">
+  Custom system prompt
+</ParamField>
+
+<ParamField path="additional_instructions" type="str">
+  Extra instructions to append
+</ParamField>
+
+<ParamField path="disallowed_tools" type="list[str]">
+  Tools to exclude
+</ParamField>
+
+<ParamField path="use_server_manager" type="bool" default="False">
+  Enable dynamic server selection
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging
+</ParamField>
+
+<ParamField path="pretty_print" type="bool" default="False">
+  Pretty print execution steps
+</ParamField>
+
+<ParamField path="retry_on_error" type="bool" default="True">
+  Retry on tool errors
+</ParamField>
+
+### Methods
+
+#### run()
+
+```python
+async def run(
+    query: str | HumanMessage,
+    max_steps: int | None = None,
+    manage_connector: bool = True,
+    external_history: list[BaseMessage] | None = None,
+    output_schema: type[T] | None = None
+) -> str | T
+```
+
+Run a query and return the final result.
+
+<ParamField path="query" type="str | HumanMessage" required>
+  Query to execute
+</ParamField>
+
+<ParamField path="max_steps" type="int">
+  Override default max steps
+</ParamField>
+
+<ParamField path="external_history" type="list[BaseMessage]">
+  External conversation history
+</ParamField>
+
+<ParamField path="output_schema" type="type[BaseModel]">
+  Pydantic model for structured output
+</ParamField>
+
+#### stream()
+
+```python
+async def stream(
+    query: str | HumanMessage,
+    max_steps: int | None = None,
+    manage_connector: bool = True,
+    external_history: list[BaseMessage] | None = None,
+    output_schema: type[T] | None = None
+) -> AsyncGenerator[tuple[AgentAction, str] | str | T, None]
+```
+
+Stream agent execution with real-time updates.
+
+#### initialize()
+
+```python
+async def initialize() -> None
+```
+
+Initialize the agent and connect to servers.
+
+#### close()
+
+```python
+async def close() -> None
+```
+
+Close the agent and cleanup resources.
+
+#### get_conversation_history()
+
+```python
+def get_conversation_history() -> list[BaseMessage]
+```
+
+Get the conversation history.
+
+#### clear_conversation_history()
+
+```python
+def clear_conversation_history() -> None
+```
+
+Clear the conversation history.
+
+#### add_to_history()
+
+```python
+def add_to_history(message: BaseMessage) -> None
+```
+
+Add a message to the conversation history.
+
+#### set_system_message()
+
+```python
+def set_system_message(message: str) -> None
+```
+
+Set a new system message.
+
+#### set_disallowed_tools()
+
+```python
+def set_disallowed_tools(disallowed_tools: list[str]) -> None
+```
+
+Set tools to exclude from the agent.
+
+#### get_disallowed_tools()
+
+```python
+def get_disallowed_tools() -> list[str]
+```
+
+Get the list of disallowed tools.

@@ -1,0 +1,713 @@
+---
+title: 'Sampling'
+description: 'Request LLM completions from MCP clients'
+icon: 'sparkles'
+---
+
+# Sampling (LLM Requests)
+
+Sampling allows your MCP server to request LLM completions from connected clients. This enables tools to leverage AI capabilities for analysis, generation, and reasoning.
+
+## Overview
+
+The sampling feature lets you:
+- **Request AI completions** from any connected MCP client
+- **Use client's LLM** without managing API keys or billing
+- **Control model preferences** (speed vs intelligence trade-offs)
+- **Track progress** for long-running completions
+- **Handle timeouts** gracefully
+
+<Note>
+  The client must support the sampling capability for this feature to work. Most modern MCP clients (Claude Desktop, Goose, etc.) support sampling.
+</Note>
+
+## Quick Start
+
+Request a completion from the client's LLM:
+
+```typescript
+import { MCPServer, text } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+server.tool(
+  {
+    name: 'analyze-text',
+    description: 'Analyze text sentiment using LLM',
+    schema: z.object({
+      text: z.string()
+    })
+  },
+  async ({ text }, ctx) => {
+    // Simple API - just pass a string prompt
+    const result = await ctx.sample(
+      `Analyze the sentiment of this text as positive, negative, or neutral: ${text}`
+    );
+    
+    const content = Array.isArray(result.content) 
+      ? result.content[0] 
+      : result.content;
+    
+    const sentiment = content?.type === 'text' ? content.text : 'Unknown';
+    
+    return text(`Sentiment: ${sentiment}`);
+  }
+);
+
+await server.listen();
+```
+
+## Sampling APIs
+
+### Simple String API (Recommended)
+
+For most use cases, just pass a string prompt:
+
+```typescript
+server.tool(
+  {
+    name: 'generate-summary',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    // Simplest form - defaults: maxTokens=1000, no model preference
+    const result = await ctx.sample(
+      `Summarize this text in 2-3 sentences: ${text}`
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+### String API with Options
+
+Customize behavior with options:
+
+```typescript
+server.tool(
+  {
+    name: 'analyze-code',
+    schema: z.object({ code: z.string() })
+  },
+  async ({ code }, ctx) => {
+    const result = await ctx.sample(
+      `Review this code for bugs and improvements: ${code}`,
+      {
+        maxTokens: 500,        // Limit response length
+        temperature: 0.3,       // Lower temp for consistency
+        timeout: 30000          // 30 second timeout
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+### Full Control API
+
+For advanced use cases with complete control:
+
+```typescript
+server.tool(
+  {
+    name: 'complex-analysis',
+    schema: z.object({ data: z.string() })
+  },
+  async ({ data }, ctx) => {
+    const result = await ctx.sample(
+      {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `Analyze this data: ${data}`
+            }
+          }
+        ],
+        modelPreferences: {
+          // Priority hints for client (0.0 - 1.0)
+          intelligencePriority: 0.8,  // Prefer smarter models
+          speedPriority: 0.5           // Balance speed
+        },
+        systemPrompt: 'You are a data analysis expert.',
+        maxTokens: 1000,
+        temperature: 0.7
+      },
+      {
+        // Progress tracking
+        onProgress: ({ message }) => {
+          console.log(`[Progress] ${message}`);
+        },
+        progressIntervalMs: 3000,  // Update every 3s
+        timeout: 120000             // 2 minute timeout
+      }
+    );
+    
+    return text(result.content[0].text);
+  }
+);
+```
+
+## Sampling Parameters
+
+### Request Parameters
+
+<ParamField path="messages" type="array" required>
+  Array of message objects with role and content:
+  
+  ```typescript
+  messages: [
+    {
+      role: 'user',
+      content: {
+        type: 'text',
+        text: 'Your prompt here'
+      }
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField path="modelPreferences" type="object">
+  Hints for the client about model selection:
+  
+  - `intelligencePriority` (0.0 - 1.0): Prefer smarter models
+  - `speedPriority` (0.0 - 1.0): Prefer faster models
+  - `costPriority` (0.0 - 1.0): Prefer cheaper models
+  
+  ```typescript
+  modelPreferences: {
+    intelligencePriority: 0.8,  // High intelligence
+    speedPriority: 0.3,          // Less important
+    costPriority: 0.5            // Moderate
+  }
+  ```
+</ParamField>
+
+<ParamField path="systemPrompt" type="string">
+  System prompt to set context for the completion
+</ParamField>
+
+<ParamField path="maxTokens" type="number" default="1000">
+  Maximum number of tokens to generate
+</ParamField>
+
+<ParamField path="temperature" type="number">
+  Sampling temperature (0.0 - 2.0). Lower values are more deterministic.
+</ParamField>
+
+<ParamField path="stopSequences" type="string[]">
+  Sequences that will stop generation when encountered
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Additional metadata for the request
+</ParamField>
+
+### Options
+
+<ParamField path="onProgress" type="function">
+  Callback for progress updates:
+  
+  ```typescript
+  onProgress: ({ message, progress, total }) => {
+    console.log(`${message}: ${progress}/${total}`);
+  }
+  ```
+</ParamField>
+
+<ParamField path="progressIntervalMs" type="number" default="5000">
+  How often to send progress updates (milliseconds)
+</ParamField>
+
+<ParamField path="timeout" type="number">
+  Request timeout in milliseconds. If not set, no timeout is applied.
+</ParamField>
+
+## Response Format
+
+Sampling returns a response with content:
+
+```typescript
+interface SamplingResponse {
+  content: ContentItem | ContentItem[];
+  model?: string;      // Model used by client
+  stopReason?: string; // Why generation stopped
+}
+
+interface ContentItem {
+  type: 'text' | 'image' | 'resource';
+  text?: string;
+  data?: string;
+  mimeType?: string;
+}
+```
+
+Access the response:
+
+```typescript
+const result = await ctx.sample('Analyze this...');
+
+// Content may be single item or array
+const content = Array.isArray(result.content)
+  ? result.content[0]
+  : result.content;
+
+if (content.type === 'text') {
+  const text = content.text;
+  console.log('Response:', text);
+}
+
+// Check which model was used
+if (result.model) {
+  console.log('Model:', result.model);
+}
+
+// Check stop reason
+if (result.stopReason === 'endTurn') {
+  console.log('Completed normally');
+} else if (result.stopReason === 'maxTokens') {
+  console.log('Hit token limit');
+}
+```
+
+## Common Patterns
+
+### Sentiment Analysis
+
+```typescript
+server.tool(
+  {
+    name: 'analyze-sentiment',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    const result = await ctx.sample(
+      `Analyze the sentiment as positive, negative, or neutral. ` +
+      `Output only one word. Text: ${text}`,
+      { maxTokens: 10 } // Short response
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    const sentiment = content?.type === 'text' 
+      ? content.text.toLowerCase().trim()
+      : 'unknown';
+    
+    return text(`Sentiment: ${sentiment}`);
+  }
+);
+```
+
+### Code Review
+
+```typescript
+server.tool(
+  {
+    name: 'review-code',
+    schema: z.object({ 
+      code: z.string(),
+      language: z.string()
+    })
+  },
+  async ({ code, language }, ctx) => {
+    const result = await ctx.sample(
+      {
+        messages: [{
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Review this ${language} code for bugs, security issues, and improvements:\n\n${code}`
+          }
+        }],
+        systemPrompt: 'You are an expert code reviewer.',
+        modelPreferences: {
+          intelligencePriority: 1.0 // Use smartest available model
+        },
+        maxTokens: 1500
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+### Translation
+
+```typescript
+server.tool(
+  {
+    name: 'translate',
+    schema: z.object({
+      text: z.string(),
+      from: z.string(),
+      to: z.string()
+    })
+  },
+  async ({ text, from, to }, ctx) => {
+    const result = await ctx.sample(
+      `Translate from ${from} to ${to}: ${text}`,
+      { 
+        temperature: 0.3, // More deterministic
+        maxTokens: 500 
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+### Data Extraction
+
+```typescript
+server.tool(
+  {
+    name: 'extract-data',
+    schema: z.object({ 
+      text: z.string(),
+      format: z.enum(['json', 'csv', 'yaml'])
+    })
+  },
+  async ({ text, format }, ctx) => {
+    const result = await ctx.sample(
+      `Extract structured data from this text and format as ${format}: ${text}`,
+      { 
+        temperature: 0.2,  // Very deterministic
+        maxTokens: 1000 
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+## Progress Tracking
+
+Track progress for long-running completions:
+
+```typescript
+server.tool(
+  {
+    name: 'analyze-large-document',
+    schema: z.object({ document: z.string() })
+  },
+  async ({ document }, ctx) => {
+    let lastProgress = 0;
+    
+    const result = await ctx.sample(
+      `Analyze this document: ${document}`,
+      {
+        maxTokens: 2000,
+        onProgress: ({ message, progress, total }) => {
+          // Log progress updates
+          if (progress > lastProgress) {
+            console.log(`Progress: ${message} (${progress}/${total})`);
+            lastProgress = progress;
+          }
+        },
+        progressIntervalMs: 2000, // Update every 2 seconds
+        timeout: 60000 // 1 minute timeout
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+```
+
+## Error Handling
+
+Handle sampling errors gracefully:
+
+```typescript
+server.tool(
+  {
+    name: 'safe-analysis',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    try {
+      const result = await ctx.sample(
+        `Analyze: ${text}`,
+        { timeout: 30000 }
+      );
+      
+      const content = Array.isArray(result.content)
+        ? result.content[0]
+        : result.content;
+      
+      if (content?.type === 'text') {
+        return text(content.text);
+      }
+      
+      return { error: 'Unexpected response format' };
+    } catch (err) {
+      if (err.message.includes('timeout')) {
+        return { error: 'Request timed out' };
+      }
+      
+      if (err.message.includes('capability')) {
+        return { error: 'Client does not support sampling' };
+      }
+      
+      return { error: `Sampling failed: ${err.message}` };
+    }
+  }
+);
+```
+
+## Model Preferences
+
+Guide the client's model selection:
+
+```typescript
+// High intelligence for complex reasoning
+const result = await ctx.sample(
+  { 
+    messages: [...],
+    modelPreferences: {
+      intelligencePriority: 1.0,
+      speedPriority: 0.0,
+      costPriority: 0.0
+    }
+  }
+);
+
+// Fast responses for simple tasks
+const result = await ctx.sample(
+  { 
+    messages: [...],
+    modelPreferences: {
+      intelligencePriority: 0.3,
+      speedPriority: 1.0,
+      costPriority: 0.5
+    }
+  }
+);
+
+// Balanced for general use
+const result = await ctx.sample(
+  { 
+    messages: [...],
+    modelPreferences: {
+      intelligencePriority: 0.6,
+      speedPriority: 0.6,
+      costPriority: 0.6
+    }
+  }
+);
+```
+
+<Note>
+  Model preferences are hints, not guarantees. The client decides which model to use based on availability and configuration.
+</Note>
+
+## Best Practices
+
+### 1. Use Simple API When Possible
+
+```typescript
+// Good - simple and readable
+const result = await ctx.sample('Summarize this: ...');
+
+// Overkill for simple prompts
+const result = await ctx.sample({
+  messages: [{
+    role: 'user',
+    content: { type: 'text', text: 'Summarize this: ...' }
+  }],
+  modelPreferences: { intelligencePriority: 0.5 },
+  maxTokens: 1000
+});
+```
+
+### 2. Set Appropriate Token Limits
+
+```typescript
+// Short responses
+await ctx.sample('Answer yes or no: ...', { maxTokens: 10 });
+
+// Medium responses
+await ctx.sample('Summarize: ...', { maxTokens: 500 });
+
+// Long responses
+await ctx.sample('Detailed analysis: ...', { maxTokens: 2000 });
+```
+
+### 3. Handle Client Capabilities
+
+Check if sampling is available:
+
+```typescript
+server.tool(
+  { name: 'analyze' },
+  async (params, ctx) => {
+    if (!ctx.sample) {
+      return { 
+        error: 'This tool requires a client that supports sampling' 
+      };
+    }
+    
+    const result = await ctx.sample('Analyze...');
+    // ...
+  }
+);
+```
+
+### 4. Use Temperature Appropriately
+
+```typescript
+// Deterministic tasks (extraction, classification)
+await ctx.sample('Extract email: ...', { temperature: 0.2 });
+
+// Balanced (general use)
+await ctx.sample('Summarize: ...', { temperature: 0.7 });
+
+// Creative tasks (generation, brainstorming)
+await ctx.sample('Generate ideas: ...', { temperature: 1.2 });
+```
+
+## Complete Example
+
+See `examples/server/features/sampling/src/server.ts` for a complete example:
+
+```typescript
+import { MCPServer, text } from 'mcp-use/server';
+import z from 'zod';
+
+const server = new MCPServer({
+  name: 'sampling-example',
+  version: '1.0.0'
+});
+
+// Simple API
+server.tool(
+  {
+    name: 'analyze-simple',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    const result = await ctx.sample(
+      `Analyze sentiment: ${text}`
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+
+// With options
+server.tool(
+  {
+    name: 'analyze-with-options',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    const result = await ctx.sample(
+      `Analyze sentiment: ${text}`,
+      { 
+        maxTokens: 50,
+        temperature: 0.3,
+        timeout: 30000
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+
+// Full control
+server.tool(
+  {
+    name: 'analyze-full-control',
+    schema: z.object({ text: z.string() })
+  },
+  async ({ text }, ctx) => {
+    const result = await ctx.sample(
+      {
+        messages: [{
+          role: 'user',
+          content: { type: 'text', text: `Analyze: ${text}` }
+        }],
+        modelPreferences: {
+          intelligencePriority: 0.8,
+          speedPriority: 0.5
+        },
+        maxTokens: 100
+      },
+      {
+        onProgress: ({ message }) => console.log(message),
+        timeout: 120000
+      }
+    );
+    
+    const content = Array.isArray(result.content)
+      ? result.content[0]
+      : result.content;
+    
+    return text(content?.type === 'text' ? content.text : 'Error');
+  }
+);
+
+await server.listen();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Widgets" icon="window" href="/typescript/server/widgets">
+    Create interactive UIs
+  </Card>
+  <Card title="OAuth" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+  <Card title="Notifications" icon="bell" href="/typescript/server/notifications">
+    Real-time updates
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

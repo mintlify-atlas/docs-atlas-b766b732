@@ -1,0 +1,454 @@
+---
+title: 'Manufact Cloud Deployment'
+description: 'Deploy your MCP servers to managed cloud infrastructure'
+icon: 'cloud'
+---
+
+## Overview
+
+Manufact Cloud is the official managed hosting platform for MCP servers built with mcp-use. It provides automatic deployments from GitHub, built-in observability, and zero infrastructure management.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="GitHub Integration" icon="github">
+    Automatic deployments from your GitHub repository with branch-based deployments
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Built-in metrics, logs, and performance monitoring for all deployments
+  </Card>
+  <Card title="Custom Domains" icon="globe">
+    Use your own domain names with automatic SSL certificates
+  </Card>
+  <Card title="Zero Config" icon="bolt">
+    Automatic runtime detection and optimized build configurations
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Steps>
+  <Step title="MCP Server Project">
+    You need an MCP server built with mcp-use. Create one if you haven't:
+    
+    ```bash
+    npx create-mcp-use-app my-server
+    cd my-server
+    ```
+  </Step>
+  
+  <Step title="GitHub Repository">
+    Your project must be in a GitHub repository:
+    
+    ```bash
+    git init
+    git add .
+    git commit -m "Initial commit"
+    git remote add origin https://github.com/your-username/my-server.git
+    git push -u origin main
+    ```
+  </Step>
+  
+  <Step title="Install CLI">
+    Install the mcp-use CLI globally or use npx:
+    
+    ```bash
+    npm install -g @mcp-use/cli
+    # or use npx (no installation required)
+    ```
+  </Step>
+</Steps>
+
+## Quick Deployment
+
+<Steps>
+  <Step title="Login to Manufact Cloud">
+    Authenticate with your Manufact account:
+    
+    ```bash
+    npx mcp-use login
+    ```
+    
+    This will open your browser to complete authentication.
+  </Step>
+  
+  <Step title="Deploy Your Server">
+    From your project directory, run:
+    
+    ```bash
+    npx mcp-use deploy
+    ```
+    
+    The CLI will:
+    - Detect your GitHub repository
+    - Verify GitHub App permissions
+    - Analyze your project structure
+    - Create and deploy your server
+  </Step>
+  
+  <Step title="Access Your Deployment">
+    Once deployed, you'll receive:
+    
+    - **MCP Server URL**: `https://your-server.run.mcp-use.com/mcp`
+    - **Dashboard**: `https://manufact.com/cloud/servers/your-server`
+    - **Inspector**: Auto-connect URL for testing
+  </Step>
+</Steps>
+
+<Tip>
+  The first deployment creates a server and links your project. Subsequent deploys reuse the same URL.
+</Tip>
+
+## Deployment Configuration
+
+### Basic Options
+
+```bash
+# Deploy with custom name
+npx mcp-use deploy --name my-production-server
+
+# Deploy with custom port
+npx mcp-use deploy --port 8000
+
+# Deploy and open in browser
+npx mcp-use deploy --open
+
+# Specify runtime explicitly
+npx mcp-use deploy --runtime node
+# or
+npx mcp-use deploy --runtime python
+```
+
+### Environment Variables
+
+<Tabs>
+  <Tab title="Using --env Flag">
+    ```bash
+    npx mcp-use deploy \
+      --env OPENAI_API_KEY=sk-... \
+      --env WORKOS_CLIENT_ID=client_...
+    ```
+  </Tab>
+  
+  <Tab title="Using .env File">
+    Create `.env.production`:
+    
+    ```bash
+    OPENAI_API_KEY=sk-...
+    WORKOS_CLIENT_ID=client_...
+    WORKOS_API_KEY=sk-...
+    NODE_ENV=production
+    ```
+    
+    Deploy with env file:
+    
+    ```bash
+    npx mcp-use deploy --env-file .env.production
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Environment variables set via CLI override values from `.env` files. The precedence is: CLI flags > env file > existing deployment values.
+</Warning>
+
+### Advanced Configuration
+
+The CLI automatically detects build and start commands from your `package.json`. You can also specify them manually:
+
+```json
+// package.json
+{
+  "name": "my-mcp-server",
+  "scripts": {
+    "build": "mcp-use build",
+    "start": "mcp-use start"
+  }
+}
+```
+
+## GitHub Integration
+
+### Connecting GitHub
+
+<Steps>
+  <Step title="First Deployment">
+    On your first deployment, the CLI will prompt you to connect GitHub if not already connected.
+  </Step>
+  
+  <Step title="Install GitHub App">
+    The CLI will open your browser to install the mcp-use GitHub App. Select the repositories you want to deploy.
+  </Step>
+  
+  <Step title="Grant Access">
+    The GitHub App needs read access to your repository code to deploy. You can:
+    
+    - Grant access to all repositories
+    - Select specific repositories
+    - Modify access anytime at `https://github.com/settings/installations`
+  </Step>
+</Steps>
+
+### Repository Requirements
+
+<Check>
+  Your repository must be pushed to GitHub before deployment.
+</Check>
+
+```bash
+# Verify your remote is set
+git remote -v
+# Should show: origin https://github.com/username/repo.git
+
+# Check current branch
+git branch
+# Should show: * main (or your deployment branch)
+
+# Ensure latest changes are pushed
+git status
+git push
+```
+
+<Note>
+  Deployments use the code from GitHub, not your local filesystem. Uncommitted changes won't be deployed.
+</Note>
+
+## Project Linking
+
+Manufact Cloud maintains deployment stability through project linking:
+
+### How It Works
+
+1. **First Deployment**: Creates a new server and saves a link in `.mcp-use/project.json`
+2. **Subsequent Deployments**: Reuses the same server and URL
+3. **Blue-Green Deployment**: New version deployed without downtime
+
+### Project Link File
+
+```json
+// .mcp-use/project.json
+{
+  "deploymentId": "dep_abc123",
+  "deploymentName": "my-server",
+  "deploymentUrl": "abc123.run.mcp-use.com",
+  "serverId": "srv_xyz789",
+  "linkedAt": "2025-02-19T10:30:00.000Z"
+}
+```
+
+<Tip>
+  Add `.mcp-use/` to your `.gitignore` if you want different deployments per developer. Commit it to maintain a shared deployment.
+</Tip>
+
+### Creating New Deployments
+
+To create a completely new deployment (new URL):
+
+```bash
+npx mcp-use deploy --new
+```
+
+This creates a new server instead of redeploying to the existing one.
+
+## Monitoring Deployments
+
+### Real-Time Logs
+
+```bash
+# Stream deployment logs
+npx mcp-use deployments logs <deployment-id> --follow
+
+# View build logs
+npx mcp-use deployments logs <deployment-id> --build
+```
+
+### Deployment Status
+
+```bash
+# List all deployments
+npx mcp-use deployments list
+
+# Get deployment details
+npx mcp-use deployments get <deployment-id>
+```
+
+### Dashboard
+
+Access the Manufact Cloud dashboard for:
+- Real-time metrics and logs
+- Performance monitoring
+- Error tracking
+- Request analytics
+
+## Managing Deployments
+
+### Restart a Deployment
+
+```bash
+# Restart and follow logs
+npx mcp-use deployments restart <deployment-id> --follow
+```
+
+### Update Environment Variables
+
+```bash
+# Set environment variables
+npx mcp-use deployments env set <deployment-id> \
+  API_KEY=new-key \
+  DEBUG=true
+
+# List current variables
+npx mcp-use deployments env list <deployment-id>
+
+# Remove variables
+npx mcp-use deployments env unset <deployment-id> OLD_KEY
+```
+
+<Note>
+  Changing environment variables requires a deployment restart to take effect.
+</Note>
+
+### Delete a Deployment
+
+```bash
+# Delete with confirmation
+npx mcp-use deployments delete <deployment-id>
+
+# Delete without confirmation
+npx mcp-use deployments delete <deployment-id> --yes
+```
+
+## Troubleshooting
+
+### Deployment Failures
+
+<AccordionGroup>
+  <Accordion title="GitHub Connection Issues">
+    **Problem**: `No GitHub installations found` or `Authenticated git clone failed`
+    
+    **Solution**:
+    1. Visit `https://github.com/settings/installations`
+    2. Find "mcp-use" GitHub App
+    3. Click "Configure"
+    4. Grant access to your repository
+    5. Retry deployment: `npx mcp-use deploy`
+  </Accordion>
+  
+  <Accordion title="Build Failures">
+    **Problem**: Build fails during deployment
+    
+    **Solution**:
+    1. Check build logs: `npx mcp-use deployments logs <id> --build`
+    2. Verify your build script works locally: `npm run build`
+    3. Ensure all dependencies are in `package.json`
+    4. Check for missing environment variables
+  </Accordion>
+  
+  <Accordion title="Runtime Errors">
+    **Problem**: Deployment succeeds but server crashes
+    
+    **Solution**:
+    1. Check runtime logs: `npx mcp-use deployments logs <id> --follow`
+    2. Verify start command: Should call `mcp-use start` or start your server
+    3. Check port configuration: Server should listen on `process.env.PORT`
+    4. Ensure all required environment variables are set
+  </Accordion>
+  
+  <Accordion title="Authentication Errors">
+    **Problem**: `You are not logged in` or token expired
+    
+    **Solution**:
+    ```bash
+    # Check login status
+    npx mcp-use whoami
+    
+    # Re-authenticate
+    npx mcp-use logout
+    npx mcp-use login
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Common Issues
+
+<CodeGroup>
+```bash Port Already in Use
+# Your server must listen on process.env.PORT
+# Update your server code:
+
+const port = process.env.PORT || 3000;
+await server.listen(port);
+```
+
+```bash Missing Dependencies
+# Ensure all dependencies are listed in package.json
+npm install --save missing-package
+git add package.json package-lock.json
+git commit -m "Add missing dependency"
+git push
+```
+
+```bash Environment Variables
+# Set required environment variables
+npx mcp-use deployments env set <id> \
+  REQUIRED_VAR=value
+
+# Then restart
+npx mcp-use deployments restart <id>
+```
+</CodeGroup>
+
+## Custom Domains
+
+Add your own domain to your MCP server:
+
+<Steps>
+  <Step title="Configure Domain">
+    In the Manufact Cloud dashboard:
+    1. Go to your server settings
+    2. Click "Custom Domain"
+    3. Enter your domain (e.g., `api.yourdomain.com`)
+  </Step>
+  
+  <Step title="Update DNS">
+    Add a CNAME record pointing to your deployment:
+    
+    ```dns
+    api.yourdomain.com CNAME your-server.run.mcp-use.com
+    ```
+  </Step>
+  
+  <Step title="Verify & Enable">
+    SSL certificates are automatically provisioned. Your MCP server will be available at:
+    
+    `https://api.yourdomain.com/mcp`
+  </Step>
+</Steps>
+
+## Pricing
+
+<Note>
+  Visit [manufact.com/pricing](https://manufact.com/pricing) for current pricing information.
+</Note>
+
+Manufact Cloud offers:
+- **Free tier**: For development and testing
+- **Pro tier**: For production deployments
+- **Enterprise**: Custom solutions with SLA
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integrate with ChatGPT" icon="message" href="/deployment/chatgpt">
+    Connect your deployed server to ChatGPT
+  </Card>
+  <Card title="Integrate with Claude" icon="brain" href="/deployment/claude">
+    Use your server with Claude Desktop
+  </Card>
+  <Card title="Custom Domains" icon="globe" href="/deployment/manufact-cloud#custom-domains">
+    Set up a custom domain for your server
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/deployment/overview#monitoring-and-observability">
+    Set up observability and monitoring
+  </Card>
+</CardGroup>

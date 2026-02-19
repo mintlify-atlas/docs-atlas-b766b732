@@ -1,0 +1,123 @@
+---
+title: "Server Manager"
+description: "Dynamic server selection for agents"
+icon: "server"
+---
+
+## Overview
+
+Server Manager enables agents to dynamically choose the most appropriate MCP server for tasks. This is useful when you have multiple servers and want intelligent server selection.
+
+## Enabling Server Manager
+
+```python
+from mcp_use import MCPAgent, MCPClient
+from langchain_openai import ChatOpenAI
+
+config = {
+    "mcpServers": {
+        "browser": {"command": "npx", "args": ["@playwright/mcp@latest"]},
+        "filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]}
+    }
+}
+
+client = MCPClient(config=config)
+llm = ChatOpenAI(model="gpt-4o")
+
+agent = MCPAgent(
+    llm=llm,
+    client=client,
+    use_server_manager=True
+)
+
+result = await agent.run(
+    "Search for Python tutorials and save URLs to file"
+)
+# Agent automatically selects browser for search and filesystem for saving
+```
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Reduces Tool Overload" icon="lightbulb">
+    Agent sees fewer tools at once
+  </Card>
+  <Card title="Efficient Connections" icon="bolt">
+    Only connects to needed servers
+  </Card>
+  <Card title="Dynamic Selection" icon="shuffle">
+    Agent chooses servers per task
+  </Card>
+  <Card title="Better Performance" icon="gauge-high">
+    Faster tool discovery
+  </Card>
+</CardGroup>
+
+## How It Works
+
+With Server Manager:
+
+1. Agent sees server management tools
+2. Agent decides which servers to connect to
+3. Tools from selected servers become available
+4. Agent uses appropriate tools
+5. Agent can connect/disconnect as needed
+
+Without Server Manager:
+
+- All tools available immediately
+- Can overwhelm agent with too many tools
+
+## Example Workflow
+
+```python
+agent = MCPAgent(llm=llm, client=client, use_server_manager=True)
+
+result = await agent.run("""
+Research top tech companies,
+save data to database,
+generate PDF report,
+and email it to team@company.com
+""")
+
+# Agent automatically:
+# 1. Connects to browser for research
+# 2. Connects to database for storage
+# 3. Connects to filesystem for PDF
+# 4. Connects to email for sending
+```
+
+## Server Manager Tools
+
+When enabled, agents get:
+
+- `list_available_servers` - List configured servers
+- `connect_to_mcp_server` - Connect to a server
+- `disconnect_from_mcp_server` - Disconnect from server
+- `get_active_servers` - Get connected servers
+- `search_tools_across_servers` - Search for tools
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use for 5+ Servers">
+    Enable when you have many servers
+  </Accordion>
+  <Accordion title="Clear Server Names">
+    Use descriptive server names
+  </Accordion>
+  <Accordion title="Monitor Performance">
+    Compare with/without server manager
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agent API" icon="book" href="/python/api/agent">
+    Complete agent API reference
+  </Card>
+  <Card title="Client API" icon="plug" href="/python/api/client">
+    Client API documentation
+  </Card>
+</CardGroup>

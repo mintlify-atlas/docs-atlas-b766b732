@@ -1,0 +1,480 @@
+---
+title: "Client Configuration"
+description: "Configure MCP client connections"
+icon: "gear"
+---
+
+## Configuration Format
+
+MCP clients use JSON configuration to define server connections:
+
+```json config.json
+{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["package-name"],
+      "env": {
+        "ENV_VAR": "value"
+      }
+    }
+  }
+}
+```
+
+## Stdio Configuration
+
+For process-based MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/directory"
+      ],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "python-server": {
+      "command": "python",
+      "args": ["-m", "my_mcp_server"],
+      "env": {
+        "PYTHONPATH": "/path/to/project"
+      }
+    }
+  }
+}
+```
+
+### Stdio Configuration Fields
+
+<ParamField path="command" type="str" required>
+  Command to execute (e.g., "npx", "python", "node")
+</ParamField>
+
+<ParamField path="args" type="list[str]" required>
+  Arguments passed to the command
+</ParamField>
+
+<ParamField path="env" type="dict[str, str]">
+  Environment variables for the process
+</ParamField>
+
+## HTTP Configuration
+
+For HTTP-based MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "remote-server": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer token123"
+      },
+      "timeout": 30,
+      "sse_read_timeout": 300
+    }
+  }
+}
+```
+
+### HTTP Configuration Fields
+
+<ParamField path="url" type="str" required>
+  Full URL to the MCP endpoint
+</ParamField>
+
+<ParamField path="headers" type="dict[str, str]">
+  HTTP headers to include in requests
+</ParamField>
+
+<ParamField path="timeout" type="int" default="5">
+  Connection timeout in seconds
+</ParamField>
+
+<ParamField path="sse_read_timeout" type="int" default="300">
+  SSE read timeout in seconds (5 minutes default)
+</ParamField>
+
+<ParamField path="auth" type="dict">
+  Authentication configuration (bearer token)
+</ParamField>
+
+## WebSocket Configuration
+
+For WebSocket-based servers:
+
+```json
+{
+  "mcpServers": {
+    "websocket-server": {
+      "ws_url": "ws://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer token123"
+      }
+    }
+  }
+}
+```
+
+### WebSocket Configuration Fields
+
+<ParamField path="ws_url" type="str" required>
+  WebSocket URL to connect to
+</ParamField>
+
+<ParamField path="headers" type="dict[str, str]">
+  Headers for WebSocket handshake
+</ParamField>
+
+<ParamField path="auth" type="dict">
+  Authentication configuration
+</ParamField>
+
+## Authentication
+
+### Bearer Token Auth
+
+```json
+{
+  "mcpServers": {
+    "secure-server": {
+      "url": "https://api.example.com/mcp",
+      "auth": {
+        "type": "bearer",
+        "token": "your-secret-token"
+      }
+    }
+  }
+}
+```
+
+### OAuth Configuration
+
+```python
+from mcp_use import MCPClient
+
+config = {
+    "mcpServers": {
+        "oauth-server": {
+            "url": "https://api.example.com/mcp",
+            "auth": {
+                "type": "oauth",
+                "client_id": "your-client-id",
+                "client_secret": "your-client-secret",
+                "token_url": "https://auth.example.com/token"
+            }
+        }
+    }
+}
+
+client = MCPClient(config=config)
+```
+
+## Multiple Servers
+
+Connect to multiple servers simultaneously:
+
+```json
+{
+  "mcpServers": {
+    "browser": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "remote-api": {
+      "url": "https://api.example.com/mcp",
+      "headers": {
+        "X-API-Key": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+```python
+from mcp_use import MCPClient
+
+client = MCPClient.from_config_file("config.json")
+await client.create_all_sessions()
+
+# Access different servers
+browser = client.get_session("browser")
+fs = client.get_session("filesystem")
+api = client.get_session("remote-api")
+```
+
+## Environment Variables
+
+Use environment variables in configuration:
+
+```python
+import os
+import json
+from mcp_use import MCPClient
+
+config = {
+    "mcpServers": {
+        "api": {
+            "url": os.getenv("MCP_API_URL", "http://localhost:8000/mcp"),
+            "headers": {
+                "Authorization": f"Bearer {os.getenv('MCP_API_TOKEN')}"
+            }
+        }
+    }
+}
+
+client = MCPClient(config=config)
+```
+
+```bash .env
+MCP_API_URL=https://prod.example.com/mcp
+MCP_API_TOKEN=secret-token-123
+```
+
+## Sandboxed Execution
+
+Run MCP servers in E2B sandbox:
+
+```python
+from mcp_use import MCPClient
+from mcp_use.client.connectors.sandbox import SandboxOptions
+import os
+
+config = {
+    "mcpServers": {
+        "sandboxed": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-everything"]
+        }
+    }
+}
+
+sandbox_options = {
+    "api_key": os.getenv("E2B_API_KEY"),
+    "sandbox_template_id": "base"
+}
+
+client = MCPClient(
+    config=config,
+    sandbox=True,
+    sandbox_options=sandbox_options
+)
+```
+
+### Sandbox Options
+
+<ParamField path="api_key" type="str" required>
+  E2B API key (or set E2B_API_KEY env var)
+</ParamField>
+
+<ParamField path="sandbox_template_id" type="str" default="base">
+  E2B sandbox template to use
+</ParamField>
+
+<ParamField path="supergateway_command" type="str" default="npx -y supergateway">
+  Command to run supergateway in sandbox
+</ParamField>
+
+## Code Mode
+
+Enable code execution mode for tool access:
+
+```python
+from mcp_use import MCPClient
+
+config = {
+    "mcpServers": {
+        "tools": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-everything"]
+        }
+    }
+}
+
+client = MCPClient(
+    config=config,
+    code_mode=True
+)
+
+await client.create_all_sessions()
+
+# Execute code with tool access
+result = await client.execute_code("""
+tools = await search_tools("add")
+result = await tools_add(a=5, b=3)
+return result
+""")
+
+print(result['result'])  # 8
+```
+
+## Middleware
+
+Add custom middleware for request processing:
+
+```python
+from mcp_use import MCPClient
+from mcp_use.client.middleware import Middleware
+
+class LoggingMiddleware(Middleware):
+    async def process_request(self, context, next_handler):
+        print(f"Request: {context.message}")
+        result = await next_handler(context)
+        print(f"Response: {result}")
+        return result
+
+client = MCPClient(
+    config=config,
+    middleware=[LoggingMiddleware()]
+)
+```
+
+## SSL/TLS Configuration
+
+Configure SSL verification:
+
+```python
+# Disable SSL verification (not recommended for production)
+client = MCPClient(
+    config=config,
+    verify=False
+)
+
+# Use custom CA bundle
+import ssl
+import certifi
+
+client = MCPClient(
+    config=config,
+    verify=True  # Uses system certificates
+)
+```
+
+## Programmatic Configuration
+
+Build configuration programmatically:
+
+```python
+from mcp_use import MCPClient
+
+class ServerConfig:
+    def __init__(self):
+        self.servers = {}
+    
+    def add_stdio_server(self, name: str, command: str, args: list, env: dict = None):
+        self.servers[name] = {
+            "command": command,
+            "args": args,
+            "env": env or {}
+        }
+        return self
+    
+    def add_http_server(self, name: str, url: str, headers: dict = None):
+        self.servers[name] = {
+            "url": url,
+            "headers": headers or {}
+        }
+        return self
+    
+    def build(self):
+        return {"mcpServers": self.servers}
+
+# Use the builder
+config = (
+    ServerConfig()
+    .add_stdio_server(
+        "filesystem",
+        "npx",
+        ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    )
+    .add_http_server(
+        "api",
+        "http://localhost:8000/mcp",
+        {"Authorization": "Bearer token"}
+    )
+    .build()
+)
+
+client = MCPClient(config=config)
+```
+
+## Dynamic Server Management
+
+Add and remove servers at runtime:
+
+```python
+client = MCPClient(config={})
+
+# Add a server
+client.add_server("new-server", {
+    "command": "npx",
+    "args": ["-y", "package-name"]
+})
+
+# Create session for the new server
+await client.create_session("new-server")
+
+# Use the server
+session = client.get_session("new-server")
+result = await session.call_tool("tool_name", {})
+
+# Remove the server
+await client.close_session("new-server")
+client.remove_server("new-server")
+```
+
+## Configuration Best Practices
+
+<AccordionGroup>
+  <Accordion title="Store Secrets Securely">
+    Never commit secrets to version control. Use environment variables:
+    ```python
+    import os
+    token = os.getenv("MCP_API_TOKEN")
+    ```
+  </Accordion>
+
+  <Accordion title="Use Relative Paths">
+    For filesystem servers, use relative paths:
+    ```json
+    {"args": ["-y", "@modelcontextprotocol/server-filesystem", "./data"]}
+    ```
+  </Accordion>
+
+  <Accordion title="Set Reasonable Timeouts">
+    Configure timeouts based on expected operation duration:
+    ```json
+    {"timeout": 30, "sse_read_timeout": 300}
+    ```
+  </Accordion>
+
+  <Accordion title="Validate Configuration">
+    Validate config before use:
+    ```python
+    if "mcpServers" not in config:
+        raise ValueError("Missing mcpServers in config")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Connecting" icon="link" href="/python/client/connecting">
+    Establish server connections
+  </Card>
+  <Card title="Sessions" icon="network-wired" href="/python/client/sessions">
+    Manage client sessions
+  </Card>
+</CardGroup>

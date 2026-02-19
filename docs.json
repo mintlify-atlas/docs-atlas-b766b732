@@ -1,122 +1,231 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "mcp-use",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0C0C0C",
+    "light": "#ffffff",
+    "dark": "#0C0C0C"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/mcp-use/mcp-use"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mcp-use/mcp-use",
+      "discord": "https://discord.gg/XkNkSkMz3V",
+      "twitter": "https://x.com/pietrozullo"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Overview",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/mcp-protocol",
+              "concepts/servers-vs-apps",
+              "concepts/tools-resources-prompts",
+              "concepts/architecture"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/building-your-first-server",
+              "guides/building-mcp-apps",
+              "guides/connecting-to-servers",
+              "guides/creating-agents"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "TypeScript",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Getting Started",
             "pages": [
-              "api-reference/introduction"
+              "typescript/installation",
+              "typescript/quickstart"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "MCP Server",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "typescript/server/overview",
+              "typescript/server/creating-server",
+              "typescript/server/tools",
+              "typescript/server/resources",
+              "typescript/server/prompts",
+              "typescript/server/widgets",
+              "typescript/server/oauth",
+              "typescript/server/notifications",
+              "typescript/server/sampling"
+            ]
+          },
+          {
+            "group": "MCP Client",
+            "pages": [
+              "typescript/client/overview",
+              "typescript/client/configuration",
+              "typescript/client/connecting",
+              "typescript/client/sessions"
+            ]
+          },
+          {
+            "group": "MCP Agent",
+            "pages": [
+              "typescript/agent/overview",
+              "typescript/agent/basic-usage",
+              "typescript/agent/streaming",
+              "typescript/agent/memory",
+              "typescript/agent/server-manager"
+            ]
+          },
+          {
+            "group": "MCP Apps",
+            "pages": [
+              "typescript/apps/overview",
+              "typescript/apps/creating-widgets",
+              "typescript/apps/react-hooks",
+              "typescript/apps/theming",
+              "typescript/apps/chatgpt-integration",
+              "typescript/apps/claude-integration"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "typescript/api/server",
+              "typescript/api/client",
+              "typescript/api/agent",
+              "typescript/api/response-helpers",
+              "typescript/api/oauth",
+              "typescript/api/react-hooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Python",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "python/installation",
+              "python/quickstart"
+            ]
+          },
+          {
+            "group": "MCP Server",
+            "pages": [
+              "python/server/overview",
+              "python/server/creating-server",
+              "python/server/tools",
+              "python/server/resources",
+              "python/server/prompts",
+              "python/server/transport"
+            ]
+          },
+          {
+            "group": "MCP Client",
+            "pages": [
+              "python/client/overview",
+              "python/client/configuration",
+              "python/client/connecting",
+              "python/client/sessions"
+            ]
+          },
+          {
+            "group": "MCP Agent",
+            "pages": [
+              "python/agent/overview",
+              "python/agent/basic-usage",
+              "python/agent/streaming",
+              "python/agent/memory",
+              "python/agent/server-manager"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "python/api/server",
+              "python/api/client",
+              "python/api/agent",
+              "python/api/connectors",
+              "python/api/adapters"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tools",
+        "groups": [
+          {
+            "group": "Inspector",
+            "pages": [
+              "tools/inspector/overview",
+              "tools/inspector/getting-started",
+              "tools/inspector/features",
+              "tools/inspector/cli",
+              "tools/inspector/self-hosting"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "tools/cli/overview",
+              "tools/cli/commands",
+              "tools/cli/hot-reload",
+              "tools/cli/deployment"
+            ]
+          },
+          {
+            "group": "Create App",
+            "pages": [
+              "tools/create-app/overview",
+              "tools/create-app/templates",
+              "tools/create-app/customization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Deployment Options",
+            "pages": [
+              "deployment/overview",
+              "deployment/manufact-cloud",
+              "deployment/self-hosted",
+              "deployment/docker"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "deployment/chatgpt",
+              "deployment/claude",
+              "deployment/custom-clients"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

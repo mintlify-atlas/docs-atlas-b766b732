@@ -1,0 +1,387 @@
+---
+title: "Server Prompts"
+description: "Create reusable prompt templates for AI agents"
+icon: "message"
+---
+
+## What are Prompts?
+
+Prompts are reusable templates that help structure interactions with AI agents. They can accept parameters and return formatted text that guides the AI's behavior or provides context for specific tasks.
+
+## Basic Prompt
+
+```python
+from mcp_use import MCPServer
+
+server = MCPServer(name="my-server")
+
+@server.prompt(
+    name="greeting",
+    description="Generate a friendly greeting"
+)
+async def greeting(name: str) -> str:
+    """Generate a personalized greeting"""
+    return f"Hello, {name}! How can I assist you today?"
+```
+
+## Prompt Decorator Options
+
+<ParamField path="name" type="str" required>
+  Unique identifier for the prompt
+</ParamField>
+
+<ParamField path="title" type="str">
+  Human-readable title for the prompt
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description of the prompt's purpose
+</ParamField>
+
+## Code Review Prompt
+
+```python
+from typing import Annotated
+from pydantic import Field
+
+@server.prompt(
+    name="code_review",
+    title="Code Review Assistant",
+    description="Generate a code review prompt for any programming language"
+)
+async def code_review(
+    language: Annotated[str, Field(description="Programming language")],
+    code: Annotated[str, Field(description="Code to review")]
+) -> str:
+    """Generate a code review prompt"""
+    return f"""
+Please review the following {language} code:
+
+```{language}
+{code}
+```
+
+Provide feedback on:
+1. Code quality and readability
+2. Best practices and conventions
+3. Potential bugs or errors
+4. Performance improvements
+5. Security considerations
+"""
+```
+
+## Documentation Prompt
+
+```python
+@server.prompt(
+    name="write_docs",
+    title="Documentation Generator",
+    description="Generate documentation for a function or class"
+)
+async def write_docs(
+    code_type: Annotated[str, Field(description="Type: function, class, or module")],
+    code: Annotated[str, Field(description="Code to document")],
+    style: Annotated[str, Field(description="Doc style: google, numpy, or sphinx", default="google")]
+) -> str:
+    """Generate documentation for code"""
+    return f"""
+Generate {style}-style documentation for the following {code_type}:
+
+```python
+{code}
+```
+
+Include:
+- Brief description
+- Parameters with types and descriptions
+- Return value description
+- Usage examples
+- Any exceptions that may be raised
+"""
+```
+
+## Task Planning Prompt
+
+```python
+@server.prompt(
+    name="plan_task",
+    title="Task Planner",
+    description="Break down complex tasks into steps"
+)
+async def plan_task(
+    task: Annotated[str, Field(description="Task to plan")],
+    context: Annotated[str, Field(description="Additional context", default="")]
+) -> str:
+    """Generate a task planning prompt"""
+    base_prompt = f"""
+Break down the following task into clear, actionable steps:
+
+Task: {task}
+"""
+    
+    if context:
+        base_prompt += f"\nContext: {context}"
+    
+    base_prompt += """
+
+For each step:
+1. Describe what needs to be done
+2. List any prerequisites
+3. Identify potential challenges
+4. Suggest tools or resources needed
+"""
+    
+    return base_prompt
+```
+
+## Data Analysis Prompt
+
+```python
+import json
+
+@server.prompt(
+    name="analyze_data",
+    title="Data Analysis Assistant",
+    description="Generate prompts for data analysis tasks"
+)
+async def analyze_data(
+    data_description: Annotated[str, Field(description="Description of the data")],
+    questions: Annotated[list[str], Field(description="Questions to answer")]
+) -> str:
+    """Generate a data analysis prompt"""
+    questions_text = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
+    
+    return f"""
+Analyze the following data: {data_description}
+
+Answer these questions:
+{questions_text}
+
+For each question:
+- Provide the answer with supporting data
+- Show your methodology
+- Highlight any interesting patterns
+- Suggest follow-up questions
+"""
+```
+
+## Debugging Prompt
+
+```python
+@server.prompt(
+    name="debug_code",
+    title="Debug Assistant",
+    description="Help debug code issues"
+)
+async def debug_code(
+    language: Annotated[str, Field(description="Programming language")],
+    code: Annotated[str, Field(description="Code with issues")],
+    error: Annotated[str, Field(description="Error message or description")]
+) -> str:
+    """Generate a debugging prompt"""
+    return f"""
+Help debug this {language} code:
+
+```{language}
+{code}
+```
+
+Error:
+```
+{error}
+```
+
+Please:
+1. Identify the root cause of the error
+2. Explain why the error occurs
+3. Provide a fixed version of the code
+4. Suggest how to prevent similar issues
+"""
+```
+
+## System Design Prompt
+
+```python
+@server.prompt(
+    name="design_system",
+    title="System Design Assistant",
+    description="Generate system design prompts"
+)
+async def design_system(
+    system_type: Annotated[str, Field(description="Type of system to design")],
+    requirements: Annotated[list[str], Field(description="System requirements")],
+    scale: Annotated[str, Field(description="Expected scale", default="medium")]
+) -> str:
+    """Generate a system design prompt"""
+    req_text = "\n".join(f"- {req}" for req in requirements)
+    
+    return f"""
+Design a {system_type} with the following requirements:
+
+{req_text}
+
+Expected scale: {scale}
+
+Provide:
+1. High-level architecture diagram (describe components)
+2. Technology stack recommendations
+3. Data flow and storage strategy
+4. Scalability considerations
+5. Security measures
+6. Monitoring and observability approach
+"""
+```
+
+## Context-Aware Prompts
+
+Use the Context object to make prompts dynamic:
+
+```python
+from mcp.server.fastmcp import Context
+
+@server.prompt(
+    name="session_info",
+    description="Provide session context information"
+)
+async def session_info(context: Context) -> str:
+    """Generate a prompt with session information"""
+    session = context.request_context.session
+    return f"""
+You are in an active MCP session.
+Session ID: {getattr(session, 'session_id', 'unknown')}
+
+You have access to the following capabilities:
+- Tools: {len(context.fastmcp._mcp_server.list_tools())}
+- Resources: {len(context.fastmcp._mcp_server.list_resources())}
+- Prompts: {len(context.fastmcp._mcp_server.list_prompts())}
+
+How can I help you?
+"""
+```
+
+## Multi-Language Prompts
+
+```python
+@server.prompt(
+    name="translate",
+    title="Translation Assistant",
+    description="Generate translation prompts"
+)
+async def translate(
+    text: Annotated[str, Field(description="Text to translate")],
+    source_lang: Annotated[str, Field(description="Source language")],
+    target_lang: Annotated[str, Field(description="Target language")],
+    style: Annotated[str, Field(description="Translation style", default="formal")]
+) -> str:
+    """Generate a translation prompt"""
+    return f"""
+Translate the following text from {source_lang} to {target_lang}:
+
+"{text}"
+
+Style: {style}
+
+Provide:
+1. The translated text
+2. Alternative translations if appropriate
+3. Cultural notes or context
+4. Explanation of any translation choices
+"""
+```
+
+## Using Prompts from Clients
+
+Clients can retrieve and use prompts:
+
+```python client.py
+import asyncio
+from mcp_use import MCPClient
+
+async def use_prompt():
+    config = {
+        "mcpServers": {
+            "local": {"url": "http://localhost:8000/mcp"}
+        }
+    }
+    
+    client = MCPClient(config=config)
+    await client.create_all_sessions()
+    
+    session = client.get_session("local")
+    
+    # List available prompts
+    prompts = await session.list_prompts()
+    print("Available prompts:", [p.name for p in prompts])
+    
+    # Get a specific prompt
+    result = await session.get_prompt(
+        "code_review",
+        arguments={
+            "language": "python",
+            "code": "def add(a, b): return a + b"
+        }
+    )
+    
+    # The result contains the generated prompt
+    for message in result.messages:
+        print(message.content.text)
+    
+    await client.close_all_sessions()
+
+asyncio.run(use_prompt())
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Be Specific and Clear">
+    Write prompts that give clear instructions:
+    ```python
+    # Good
+    "Analyze the data and provide:
+    1. Summary statistics
+    2. Key trends
+    3. Recommendations"
+    
+    # Avoid
+    "Look at the data"
+    ```
+  </Accordion>
+
+  <Accordion title="Use Parameters">
+    Make prompts reusable with parameters:
+    ```python
+    async def review(language: str, code: str) -> str:
+        return f"Review this {language} code: {code}"
+    ```
+  </Accordion>
+
+  <Accordion title="Provide Structure">
+    Use numbered lists and sections:
+    ```python
+    """1. First step
+    2. Second step
+    3. Third step"""
+    ```
+  </Accordion>
+
+  <Accordion title="Include Examples">
+    Show expected output format:
+    ```python
+    """Provide output in this format:
+    - Item 1: description
+    - Item 2: description"""
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transport" icon="network-wired" href="/python/server/transport">
+    Configure server transport protocols
+  </Card>
+  <Card title="API Reference" icon="book" href="/python/api/server">
+    Server API documentation
+  </Card>
+</CardGroup>

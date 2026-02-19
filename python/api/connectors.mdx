@@ -1,0 +1,163 @@
+---
+title: "Connectors API Reference"
+description: "MCP connector API documentation"
+icon: "book"
+---
+
+## BaseConnector
+
+Base class for all MCP connectors.
+
+### Methods
+
+#### connect()
+
+```python
+async def connect() -> None
+```
+
+Establish connection to MCP server.
+
+#### disconnect()
+
+```python
+async def disconnect() -> None
+```
+
+Close connection to MCP server.
+
+#### initialize()
+
+```python
+async def initialize() -> InitializeResult | None
+```
+
+Initialize the MCP session.
+
+#### call_tool()
+
+```python
+async def call_tool(
+    name: str,
+    arguments: dict[str, Any],
+    read_timeout_seconds: timedelta | None = None
+) -> CallToolResult
+```
+
+Call an MCP tool.
+
+#### list_tools()
+
+```python
+async def list_tools() -> list[Tool]
+```
+
+List available tools.
+
+#### list_resources()
+
+```python
+async def list_resources() -> list[Resource]
+```
+
+List available resources.
+
+#### read_resource()
+
+```python
+async def read_resource(uri: AnyUrl) -> ReadResourceResult
+```
+
+Read a resource by URI.
+
+#### list_prompts()
+
+```python
+async def list_prompts() -> list[Prompt]
+```
+
+List available prompts.
+
+#### get_prompt()
+
+```python
+async def get_prompt(
+    name: str,
+    arguments: dict[str, Any] | None = None
+) -> GetPromptResult
+```
+
+Get a prompt by name.
+
+## StdioConnector
+
+Connector for stdio-based MCP servers.
+
+```python
+StdioConnector(
+    command: str,
+    args: list[str],
+    env: dict[str, str] | None = None,
+    sampling_callback: SamplingFnT | None = None,
+    elicitation_callback: ElicitationFnT | None = None,
+    message_handler: MessageHandlerFnT | None = None,
+    logging_callback: LoggingFnT | None = None,
+    middleware: list[Middleware] | None = None,
+    roots: list[Root] | None = None,
+    list_roots_callback: ListRootsFnT | None = None
+)
+```
+
+## HttpConnector
+
+Connector for HTTP-based MCP servers.
+
+```python
+HttpConnector(
+    base_url: str,
+    headers: dict[str, str] | None = None,
+    auth: dict[str, Any] | None = None,
+    timeout: int = 5,
+    sse_read_timeout: int = 300,
+    verify: bool | None = True,
+    sampling_callback: SamplingFnT | None = None,
+    elicitation_callback: ElicitationFnT | None = None,
+    message_handler: MessageHandlerFnT | None = None,
+    logging_callback: LoggingFnT | None = None,
+    middleware: list[Middleware] | None = None,
+    roots: list[Root] | None = None,
+    list_roots_callback: ListRootsFnT | None = None
+)
+```
+
+## WebSocketConnector
+
+Connector for WebSocket-based MCP servers.
+
+```python
+WebSocketConnector(
+    url: str,
+    headers: dict[str, str] | None = None,
+    auth: dict[str, Any] | None = None
+)
+```
+
+## SandboxConnector
+
+Connector for sandboxed MCP servers (E2B).
+
+```python
+SandboxConnector(
+    command: str,
+    args: list[str],
+    env: dict[str, str] | None = None,
+    e2b_options: SandboxOptions | None = None,
+    sampling_callback: SamplingFnT | None = None,
+    elicitation_callback: ElicitationFnT | None = None,
+    message_handler: MessageHandlerFnT | None = None,
+    logging_callback: LoggingFnT | None = None,
+    middleware: list[Middleware] | None = None,
+    roots: list[Root] | None = None,
+    list_roots_callback: ListRootsFnT | None = None
+)
+```

@@ -1,0 +1,528 @@
+---
+title: 'Widgets'
+description: 'Create interactive UI components for MCP Apps'
+icon: 'window'
+---
+
+# Widgets
+
+Widgets are interactive UI components that display rich, visual content in MCP clients. They enable you to build modern app-like experiences that work across multiple AI platforms.
+
+## Overview
+
+Widgets support **dual-protocol architecture** that works with both:
+- **ChatGPT** (using Apps SDK protocol)
+- **MCP Apps-compatible clients** like Claude, Goose, etc. (using MCP Apps Extension)
+
+The framework automatically generates metadata for both protocols, so your widget works everywhere without code changes.
+
+## Quick Start
+
+### Automatic Widget Registration
+
+Place React components in your `resources/` directory and they're automatically registered:
+
+```typescript
+import { MCPServer } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+// Widgets in resources/ are auto-discovered and registered!
+await server.listen();
+```
+
+### Creating a Widget
+
+Create `resources/weather-display/widget.tsx`:
+
+```tsx
+import { useWidget, type WidgetMetadata } from 'mcp-use/react';
+import { z } from 'zod';
+
+const propSchema = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  conditions: z.string()
+});
+
+export const widgetMetadata: WidgetMetadata = {
+  description: 'Display weather information',
+  props: propSchema,
+  metadata: {
+    prefersBorder: true,
+    autoResize: true
+  }
+};
+
+type WeatherProps = z.infer<typeof propSchema>;
+
+const WeatherDisplay: React.FC = () => {
+  const { props, theme } = useWidget<WeatherProps>();
+  
+  return (
+    <div className={theme === 'dark' ? 'dark' : 'light'}>
+      <h2>{props.city}</h2>
+      <p>{props.temperature}°C - {props.conditions}</p>
+    </div>
+  );
+};
+
+export default WeatherDisplay;
+```
+
+## Widget Definition
+
+### Widget Metadata
+
+<ParamField path="description" type="string" required>
+  What the widget displays. Used by AI models to understand when to use it.
+</ParamField>
+
+<ParamField path="props" type="ZodObject" required>
+  Zod schema defining the widget's input props
+</ParamField>
+
+<ParamField path="exposeAsTool" type="boolean" default="true">
+  Whether to automatically create a tool for this widget. Set to `false` if you want to use the widget only through custom tools.
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  UI configuration for MCP Apps clients:
+  
+  - `prefersBorder` (boolean): Whether to show a border
+  - `autoResize` (boolean): Enable automatic height adjustment
+  - `widgetDescription` (string): Custom description for ChatGPT
+  - `csp` (object): Content Security Policy configuration
+</ParamField>
+
+<ParamField path="appsSdkMetadata" type="object">
+  Advanced ChatGPT-specific metadata (optional). Only needed for ChatGPT-exclusive features.
+</ParamField>
+
+### CSP Configuration
+
+Define Content Security Policy for network requests:
+
+```tsx
+export const widgetMetadata: WidgetMetadata = {
+  description: 'Interactive map widget',
+  props: propSchema,
+  metadata: {
+    csp: {
+      // Domains for fetch/XHR requests
+      connectDomains: ['https://api.example.com'],
+      
+      // Domains for resources (images, fonts, etc.)
+      resourceDomains: [
+        'https://cdn.example.com',
+        'https://fonts.googleapis.com'
+      ],
+      
+      // Script directives (if needed)
+      scriptDirectives: ["'unsafe-eval'"], // For React runtime
+      
+      // Frame domains (for iframes)
+      frameDomains: ['https://maps.google.com'],
+      
+      // Redirect domains (for openExternal)
+      redirectDomains: ['https://app.example.com']
+    }
+  }
+};
+```
+
+## Using Widgets in Tools
+
+### Pattern 1: Auto-Exposed Widget
+
+Widgets with `exposeAsTool: true` (default) are automatically available as tools:
+
+```tsx
+// resources/greeting-card/widget.tsx
+export const widgetMetadata: WidgetMetadata = {
+  description: 'Show a greeting card',
+  props: z.object({
+    name: z.string(),
+    message: z.string()
+  }),
+  exposeAsTool: true // Default, creates 'greeting-card' tool
+};
+```
+
+AI models can call the auto-generated `greeting-card` tool directly.
+
+### Pattern 2: Custom Tools with Widgets
+
+Set `exposeAsTool: false` to use widgets only through custom tools:
+
+```tsx
+// resources/weather-display/widget.tsx
+export const widgetMetadata: WidgetMetadata = {
+  description: 'Display weather data',
+  props: z.object({
+    city: z.string(),
+    temperature: z.number(),
+    conditions: z.string()
+  }),
+  exposeAsTool: false // Don't auto-create a tool
+};
+```
+
+Then create custom tools that use the widget:
+
+```typescript
+import { widget } from 'mcp-use/server';
+
+server.tool(
+  {
+    name: 'get-weather',
+    description: 'Get current weather for a city',
+    schema: z.object({
+      city: z.string()
+    }),
+    widget: {
+      name: 'weather-display',
+      invoking: 'Fetching weather...',
+      invoked: 'Weather loaded'
+    }
+  },
+  async ({ city }) => {
+    // Fetch weather data
+    const weather = await fetchWeather(city);
+    
+    // Return widget with data
+    return widget({
+      props: {
+        city,
+        temperature: weather.temp,
+        conditions: weather.conditions
+      },
+      message: `Weather in ${city}: ${weather.conditions}`
+    });
+  }
+);
+```
+
+## Widget Development
+
+### Development Mode
+
+In development, widgets run with hot module replacement (HMR):
+
+```bash
+# Start server in dev mode
+npm run dev
+```
+
+Changes to widget files automatically reload without restarting the server.
+
+### Production Mode
+
+Build widgets for production:
+
+```bash
+# Build all widgets
+npm run build
+```
+
+This creates optimized bundles in `dist/resources/`.
+
+## Widget Helpers
+
+### useWidget Hook
+
+Access widget context and host environment:
+
+```tsx
+import { useWidget } from 'mcp-use/react';
+
+const MyWidget: React.FC = () => {
+  const {
+    props,          // Widget input props
+    isPending,      // True during loading
+    theme,          // 'light' | 'dark'
+    locale,         // User's locale (e.g., 'en-US')
+    timeZone,       // User's timezone
+    maxWidth,       // Available width
+    maxHeight,      // Available height
+    userAgent,      // Device info
+    safeArea        // Safe area insets
+  } = useWidget<MyPropsType>();
+  
+  return (
+    <div className={theme}>
+      {isPending ? 'Loading...' : props.content}
+    </div>
+  );
+};
+```
+
+### McpUseProvider
+
+Wrap your widget for additional features:
+
+```tsx
+import { McpUseProvider } from 'mcp-use/react';
+
+const MyWidget: React.FC = () => {
+  const { props } = useWidget();
+  
+  return (
+    <McpUseProvider 
+      debugger      // Show debug info
+      viewControls  // Show view controls
+      autoSize      // Auto-adjust height
+    >
+      <div>{props.content}</div>
+    </McpUseProvider>
+  );
+};
+```
+
+## Programmatic Widgets
+
+Create widgets without React components:
+
+```typescript
+server.uiResource({
+  type: 'mcpApps',
+  name: 'simple-card',
+  title: 'Simple Card',
+  description: 'A basic card widget',
+  props: {
+    title: { type: 'string', required: true },
+    content: { type: 'string', required: true }
+  },
+  htmlTemplate: `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {
+          font-family: system-ui;
+          padding: 20px;
+        }
+        .card {
+          border: 1px solid #ccc;
+          border-radius: 8px;
+          padding: 16px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h2 id="title">Title</h2>
+        <p id="content">Content</p>
+      </div>
+      <script>
+        const params = new URLSearchParams(window.location.search);
+        const props = JSON.parse(params.get('props') || '{}');
+        document.getElementById('title').textContent = props.title;
+        document.getElementById('content').textContent = props.content;
+      </script>
+    </body>
+    </html>
+  `,
+  metadata: {
+    prefersBorder: false
+  }
+});
+```
+
+## Advanced Features
+
+### Dynamic URIs
+
+Generate unique URIs for each widget instance:
+
+```typescript
+import { generateWidgetUri, buildWidgetUrl } from 'mcp-use/server';
+
+server.tool(
+  {
+    name: 'show-dashboard',
+    widget: { name: 'dashboard' }
+  },
+  async ({ userId }) => {
+    const uri = generateWidgetUri(
+      'dashboard',
+      server.buildId,
+      '.html',
+      userId // Unique suffix
+    );
+    
+    return widget({
+      props: { userId },
+      uri // Custom URI
+    });
+  }
+);
+```
+
+### External URLs
+
+Embed external web pages:
+
+```typescript
+import { createExternalUrlResource } from 'mcp-use/server';
+
+const resource = createExternalUrlResource(
+  'external-app',
+  'https://app.example.com',
+  {
+    title: 'External App',
+    description: 'Embedded external application'
+  }
+);
+
+server.uiResource(resource);
+```
+
+### Raw HTML
+
+Embed custom HTML directly:
+
+```typescript
+import { createRawHtmlResource } from 'mcp-use/server';
+
+const resource = createRawHtmlResource(
+  'custom-html',
+  '<h1>Hello World</h1>',
+  {
+    title: 'Custom HTML',
+    description: 'Raw HTML content'
+  }
+);
+
+server.uiResource(resource);
+```
+
+## Widget Types
+
+### Type Inference
+
+Widget props are type-safe through Zod:
+
+```tsx
+const propSchema = z.object({
+  count: z.number(),
+  items: z.array(z.string())
+});
+
+type Props = z.infer<typeof propSchema>;
+// Props = { count: number; items: string[] }
+
+const MyWidget: React.FC = () => {
+  const { props } = useWidget<Props>();
+  // props.count is number
+  // props.items is string[]
+};
+```
+
+## Best Practices
+
+### 1. Dual-Protocol Support
+
+Use `metadata` instead of `appsSdkMetadata` for dual-protocol compatibility:
+
+```tsx
+// Good - Works with both ChatGPT and Claude
+export const widgetMetadata: WidgetMetadata = {
+  description: 'My widget',
+  props: schema,
+  metadata: {
+    prefersBorder: true
+  }
+};
+
+// Less good - ChatGPT only
+export const widgetMetadata: WidgetMetadata = {
+  description: 'My widget',
+  props: schema,
+  appsSdkMetadata: {
+    'openai/widgetAccessible': true
+  }
+};
+```
+
+### 2. Loading States
+
+Always handle loading states:
+
+```tsx
+const MyWidget: React.FC = () => {
+  const { props, isPending } = useWidget<Props>();
+  
+  if (isPending) {
+    return <div>Loading...</div>;
+  }
+  
+  return <div>{props.content}</div>;
+};
+```
+
+### 3. Theme Support
+
+Support both light and dark themes:
+
+```tsx
+const MyWidget: React.FC = () => {
+  const { props, theme } = useWidget<Props>();
+  const isDark = theme === 'dark';
+  
+  return (
+    <div className={isDark ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}>
+      {props.content}
+    </div>
+  );
+};
+```
+
+### 4. Responsive Design
+
+Use `maxWidth` and `maxHeight` for responsive layouts:
+
+```tsx
+const MyWidget: React.FC = () => {
+  const { props, maxWidth, maxHeight } = useWidget<Props>();
+  
+  return (
+    <div style={{ maxWidth, maxHeight, overflow: 'auto' }}>
+      {props.content}
+    </div>
+  );
+};
+```
+
+## Examples
+
+### Weather Widget
+
+See the complete example in the source:
+- `examples/server/ui/mcp-apps/resources/weather-display/widget.tsx`
+- `examples/server/ui/mcp-apps/index.ts`
+
+### Product Search
+
+Complex widget with carousel and accordion:
+- `examples/server/ui/mcp-apps/apps-sdk/resources/product-search-result/widget.tsx`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OAuth" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+  <Card title="Notifications" icon="bell" href="/typescript/server/notifications">
+    Real-time updates
+  </Card>
+  <Card title="Sampling" icon="sparkles" href="/typescript/server/sampling">
+    LLM integration
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

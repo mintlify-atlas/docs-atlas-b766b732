@@ -1,0 +1,522 @@
+---
+title: 'Create App Overview'
+description: 'Scaffold new MCP applications with one command using create-mcp-use-app'
+icon: 'sparkles'
+---
+
+# Create mcp-use App
+
+**create-mcp-use-app** is the fastest way to scaffold a new MCP (Model Context Protocol) application. With just one command, you get a fully configured TypeScript project with hot reload, automatic inspector, and UI widget support.
+
+## Quick Start
+
+Create a new MCP application in seconds:
+
+```bash
+npx create-mcp-use-app my-mcp-server
+cd my-mcp-server
+npm run dev
+```
+
+That's it! Your MCP server is running at `http://localhost:3000` with the inspector automatically opened.
+
+## What You Get
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+    Full TypeScript setup with proper types
+  </Card>
+  <Card title="Hot Reload" icon="fire">
+    Auto-restart on code changes
+  </Card>
+  <Card title="Auto Inspector" icon="magnifying-glass">
+    Inspector UI opens automatically
+  </Card>
+  <Card title="UI Widgets" icon="paintbrush">
+    React components that compile to standalone pages
+  </Card>
+  <Card title="Example Tools" icon="wrench">
+    Sample MCP tools, resources, and prompts
+  </Card>
+  <Card title="Build Scripts" icon="hammer">
+    Ready-to-use dev and production scripts
+  </Card>
+  <Card title="Production Ready" icon="rocket">
+    Optimized build configuration
+  </Card>
+  <Card title="Git Ready" icon="git">
+    Pre-configured .gitignore
+  </Card>
+</CardGroup>
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="Interactive">
+    Run without arguments for interactive prompts:
+
+    ```bash
+    npx create-mcp-use-app
+    ```
+
+    You'll be prompted for:
+    - Project name
+    - Template selection
+    - Package manager
+    - Install dependencies
+    - Skills installation (Claude Code/Cursor)
+  </Tab>
+
+  <Tab title="Direct">
+    Specify project name directly:
+
+    ```bash
+    npx create-mcp-use-app my-project
+    ```
+
+    Uses default template and npm.
+  </Tab>
+
+  <Tab title="With Options">
+    Use flags to skip prompts:
+
+    ```bash
+    npx create-mcp-use-app my-project \
+      --template starter \
+      --npm \
+      --install \
+      --skills
+    ```
+  </Tab>
+</Tabs>
+
+## Command Options
+
+### Template Selection
+
+```bash
+# Use starter template (default)
+npx create-mcp-use-app my-project --template starter
+
+# Use mcp-apps template
+npx create-mcp-use-app my-project --template mcp-apps
+
+# Use blank template
+npx create-mcp-use-app my-project --template blank
+
+# Use GitHub repository as template
+npx create-mcp-use-app my-project --template owner/repo
+npx create-mcp-use-app my-project --template https://github.com/owner/repo
+```
+
+### Package Manager
+
+```bash
+# Use npm (default)
+npx create-mcp-use-app my-project --npm
+
+# Use yarn
+npx create-mcp-use-app my-project --yarn
+
+# Use pnpm
+npx create-mcp-use-app my-project --pnpm
+```
+
+### Dependency Installation
+
+```bash
+# Install dependencies automatically
+npx create-mcp-use-app my-project --install
+
+# Skip installation
+npx create-mcp-use-app my-project --no-install
+```
+
+### Skills Installation
+
+```bash
+# Install skills (prompts for Claude Code/Cursor/Both)
+npx create-mcp-use-app my-project --skills
+
+# Skip skills installation
+npx create-mcp-use-app my-project --no-skills
+```
+
+### List Templates
+
+```bash
+# Show all available templates
+npx create-mcp-use-app --list-templates
+```
+
+## Project Structure
+
+Generated project structure:
+
+```
+my-mcp-server/
+├── package.json          # Pre-configured with all scripts
+├── tsconfig.json         # TypeScript configuration
+├── .gitignore           # Git ignore rules
+├── README.md            # Project documentation
+├── src/
+│   └── index.ts         # MCP server entry point
+├── resources/           # UI widgets directory
+│   └── widget.tsx       # Example React widget
+├── public/             # Static assets
+│   ├── favicon.ico
+│   └── icon.svg
+└── dist/               # Build output (generated)
+```
+
+### Key Files
+
+<AccordionGroup>
+  <Accordion title="package.json" icon="package">
+    Pre-configured with scripts and dependencies:
+
+    ```json
+    {
+      "name": "my-mcp-server",
+      "version": "1.0.0",
+      "type": "module",
+      "scripts": {
+        "dev": "mcp-use dev",
+        "build": "mcp-use build",
+        "start": "mcp-use start",
+        "deploy": "mcp-use deploy"
+      },
+      "dependencies": {
+        "mcp-use": "^2.0.0",
+        "zod": "^4.0.0"
+      },
+      "devDependencies": {
+        "@mcp-use/cli": "^2.0.0",
+        "@mcp-use/inspector": "^0.21.0",
+        "typescript": "^5.0.0"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="src/index.ts" icon="file-code">
+    MCP server with example implementations:
+
+    ```typescript
+    import { MCPServer, text, object } from "mcp-use/server";
+    import { z } from "zod";
+
+    const server = new MCPServer({
+      name: "my-mcp-server",
+      version: "1.0.0",
+      description: "My first MCP server",
+    });
+
+    // Example tool
+    server.tool(
+      {
+        name: "fetch-weather",
+        description: "Fetch weather for a city",
+        schema: z.object({
+          city: z.string(),
+        }),
+      },
+      async ({ city }) => {
+        return text(`Weather in ${city}: Sunny`);
+      }
+    );
+
+    // Example resource
+    server.resource(
+      {
+        name: "config",
+        uri: "config://settings",
+      },
+      async () => object({ theme: "dark" })
+    );
+
+    server.listen(3000);
+    ```
+  </Accordion>
+
+  <Accordion title="tsconfig.json" icon="gear">
+    TypeScript configuration for MCP development:
+
+    ```json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "jsx": "react-jsx",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "outDir": "./dist",
+        "rootDir": "./src"
+      },
+      "include": ["src/**/*", "resources/**/*"],
+      "exclude": ["node_modules", "dist"]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## First Steps
+
+After creating your project:
+
+<Steps>
+  <Step title="Navigate to Project">
+    ```bash
+    cd my-mcp-server
+    ```
+  </Step>
+
+  <Step title="Install Dependencies (if skipped)">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Start Development">
+    ```bash
+    npm run dev
+    ```
+
+    The inspector opens automatically at `http://localhost:3000/inspector`
+  </Step>
+
+  <Step title="Explore Example Code">
+    Open `src/index.ts` to see:
+    - Example tool implementation
+    - Resource definition
+    - Prompt template
+  </Step>
+
+  <Step title="Test in Inspector">
+    - Connect to `http://localhost:3000/mcp`
+    - Browse available tools
+    - Execute the example "fetch-weather" tool
+  </Step>
+
+  <Step title="Modify and See Changes">
+    Edit `src/index.ts` and save - changes appear instantly thanks to hot reload!
+  </Step>
+</Steps>
+
+## Templates
+
+Three official templates to choose from:
+
+<CardGroup cols={3}>
+  <Card title="Starter" icon="rocket" href="/tools/create-app/templates#starter-template">
+    Full-featured template with all examples
+  </Card>
+  <Card title="MCP Apps" icon="mobile" href="/tools/create-app/templates#mcp-apps-template">
+    Optimized for OpenAI Apps SDK
+  </Card>
+  <Card title="Blank" icon="file" href="/tools/create-app/templates#blank-template">
+    Minimal setup for custom projects
+  </Card>
+</CardGroup>
+
+### Custom Templates
+
+Use any GitHub repository as a template:
+
+```bash
+# Short format
+npx create-mcp-use-app my-project --template owner/repo
+
+# Full URL
+npx create-mcp-use-app my-project --template https://github.com/owner/repo
+
+# With branch
+npx create-mcp-use-app my-project --template owner/repo#develop
+```
+
+## Skills Integration
+
+Optionally install AI coding assistant skills:
+
+<Info>
+  Skills provide context and instructions for AI coding assistants like Claude Code and Cursor.
+</Info>
+
+### What Are Skills?
+
+Skills are markdown files (`.ai/` or `.cursorrules`) that give AI assistants:
+- Project-specific context
+- Code style guidelines
+- Common patterns
+- Framework documentation
+
+### Installation Options
+
+During project creation, choose:
+
+<Tabs>
+  <Tab title="Claude Code">
+    Installs `.ai/mcp-use.md` with:
+    - mcp-use framework documentation
+    - TypeScript patterns
+    - Best practices
+  </Tab>
+
+  <Tab title="Cursor">
+    Installs `.cursorrules/mcp-use.md` for Cursor IDE.
+  </Tab>
+
+  <Tab title="Both">
+    Installs skills for both assistants.
+  </Tab>
+
+  <Tab title="None">
+    Skips skills installation.
+  </Tab>
+</Tabs>
+
+## Package Manager Detection
+
+The CLI automatically detects your package manager:
+
+```bash
+# Detects from npm_config_user_agent
+npm create mcp-use-app my-project  # Uses npm
+yarn create mcp-use-app my-project # Uses yarn  
+pnpm create mcp-use-app my-project # Uses pnpm
+```
+
+Or explicitly specify:
+
+```bash
+npx create-mcp-use-app my-project --pnpm
+```
+
+## Development Workflow
+
+Once your project is created:
+
+```bash
+# Development with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm run start
+
+# Deploy to cloud
+npm run deploy
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Command Not Found" icon="circle-xmark">
+    **Error:** `create-mcp-use-app: command not found`
+
+    **Solutions:**
+    
+    1. Ensure Node.js 20.19+ is installed:
+       ```bash
+       node --version
+       ```
+
+    2. Use npx (no installation needed):
+       ```bash
+       npx create-mcp-use-app@latest my-project
+       ```
+
+    3. Try with explicit registry:
+       ```bash
+       npm config set registry https://registry.npmjs.org/
+       npx create-mcp-use-app my-project
+       ```
+  </Accordion>
+
+  <Accordion title="Template Not Found" icon="folder">
+    **Error:** `Template 'xyz' not found`
+
+    **Solutions:**
+    
+    1. List available templates:
+       ```bash
+       npx create-mcp-use-app --list-templates
+       ```
+
+    2. Use valid template name:
+       ```bash
+       npx create-mcp-use-app my-project --template starter
+       ```
+
+    3. For GitHub templates, check repository exists:
+       ```bash
+       curl -I https://github.com/owner/repo
+       ```
+  </Accordion>
+
+  <Accordion title="Permission Denied" icon="lock">
+    **Error:** `EACCES: permission denied`
+
+    **Solutions:**
+    
+    1. Check directory permissions:
+       ```bash
+       ls -la
+       ```
+
+    2. Create in user directory:
+       ```bash
+       cd ~
+       npx create-mcp-use-app my-project
+       ```
+
+    3. On macOS/Linux, avoid sudo with npm:
+       ```bash
+       # Don't use:
+       sudo npx create-mcp-use-app
+       ```
+  </Accordion>
+
+  <Accordion title="Installation Fails" icon="download">
+    **Error:** Installation hangs or fails
+
+    **Solutions:**
+    
+    1. Clear npm cache:
+       ```bash
+       npm cache clean --force
+       ```
+
+    2. Try different package manager:
+       ```bash
+       npx create-mcp-use-app my-project --yarn
+       ```
+
+    3. Install manually:
+       ```bash
+       npx create-mcp-use-app my-project --no-install
+       cd my-project
+       npm install
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Templates" icon="layer-group" href="/tools/create-app/templates">
+    Explore available templates and their features
+  </Card>
+  <Card title="Customization" icon="sliders" href="/tools/create-app/customization">
+    Customize your generated project
+  </Card>
+  <Card title="CLI Commands" icon="terminal" href="/tools/cli/commands">
+    Learn about dev, build, and deploy commands
+  </Card>
+  <Card title="Building Tools" icon="wrench" href="/typescript/server/tools">
+    Create your first MCP tools
+  </Card>
+</CardGroup>

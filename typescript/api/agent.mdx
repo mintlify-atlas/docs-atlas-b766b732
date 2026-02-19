@@ -1,0 +1,563 @@
+---
+title: "MCPAgent API Reference"
+description: "Complete MCPAgent class API documentation for building AI agents"
+icon: "robot"
+---
+
+## MCPAgent
+
+The `MCPAgent` class provides a high-level AI agent implementation using LangChain. It integrates LLMs with MCP tools, supports streaming responses, conversation memory, and server management.
+
+### Constructor
+
+```typescript
+import { MCPAgent } from 'mcp-use/agents';
+import { ChatOpenAI } from '@langchain/openai';
+
+const agent = new MCPAgent({
+  llm: new ChatOpenAI({ model: 'gpt-4' }),
+  client: new MCPClient('./config.json'),
+  maxSteps: 10
+});
+```
+
+<ParamField path="options.llm" type="LanguageModel | string" required>
+  LangChain language model instance or model string (e.g., "openai:gpt-4")
+</ParamField>
+
+<ParamField path="options.client" type="MCPClient">
+  MCPClient instance (required for explicit mode)
+</ParamField>
+
+<ParamField path="options.connectors" type="BaseConnector[]">
+  Direct MCP connectors (alternative to client)
+</ParamField>
+
+<ParamField path="options.mcpServers" type="Record<string, MCPServerConfig>">
+  Server configurations (simplified mode only)
+</ParamField>
+
+<ParamField path="options.maxSteps" type="number" default="5">
+  Maximum number of agent reasoning steps
+</ParamField>
+
+<ParamField path="options.memoryEnabled" type="boolean" default="true">
+  Enable conversation history
+</ParamField>
+
+<ParamField path="options.systemPrompt" type="string">
+  Custom system prompt for the agent
+</ParamField>
+
+<ParamField path="options.useServerManager" type="boolean" default="false">
+  Enable dynamic server connection management
+</ParamField>
+
+<ParamField path="options.disallowedTools" type="string[]">
+  Tools to exclude from agent access
+</ParamField>
+
+<ParamField path="options.additionalTools" type="StructuredToolInterface[]">
+  Additional LangChain tools to provide
+</ParamField>
+
+<ParamField path="options.verbose" type="boolean" default="false">
+  Enable verbose logging
+</ParamField>
+
+<ParamField path="options.observe" type="boolean" default="true">
+  Enable observability tracking
+</ParamField>
+
+<ParamField path="options.callbacks" type="BaseCallbackHandler[]">
+  LangChain callback handlers for observability
+</ParamField>
+
+### Static Methods
+
+#### getPackageVersion()
+
+Get the mcp-use package version.
+
+```typescript
+const version = MCPAgent.getPackageVersion();
+console.log(`Agent version: ${version}`);
+```
+
+<ResponseField name="return" type="string">
+  The package version string
+</ResponseField>
+
+### Instance Methods
+
+#### initialize()
+
+Initialize the agent (automatically called if `autoInitialize: true`).
+
+```typescript
+await agent.initialize();
+console.log('Agent ready');
+```
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when initialization completes
+</ResponseField>
+
+#### run()
+
+Run the agent with a prompt and return the final result.
+
+```typescript
+// Simple usage
+const result = await agent.run({
+  prompt: 'What files are in /tmp?'
+});
+
+// With options
+const result = await agent.run({
+  prompt: 'Analyze this data',
+  maxSteps: 15,
+  schema: z.object({ summary: z.string(), insights: z.array(z.string()) })
+});
+```
+
+<ParamField path="options.prompt" type="string" required>
+  User prompt/query for the agent
+</ParamField>
+
+<ParamField path="options.maxSteps" type="number">
+  Override default maxSteps for this run
+</ParamField>
+
+<ParamField path="options.manageConnector" type="boolean" default="true">
+  Whether to manage connector lifecycle
+</ParamField>
+
+<ParamField path="options.externalHistory" type="BaseMessage[]">
+  External conversation history to use
+</ParamField>
+
+<ParamField path="options.schema" type="ZodSchema">
+  Zod schema for structured output
+</ParamField>
+
+<ParamField path="options.signal" type="AbortSignal">
+  AbortSignal for cancellation
+</ParamField>
+
+<ResponseField name="return" type="Promise<string | T>">
+  Agent's final response (typed if schema provided)
+</ResponseField>
+
+#### stream()
+
+Stream agent execution with step-by-step updates.
+
+```typescript
+for await (const step of agent.stream({ prompt: 'What is 2+2?' })) {
+  console.log(`Tool: ${step.action.tool}`);
+  console.log(`Input: ${JSON.stringify(step.action.toolInput)}`);
+  console.log(`Output: ${step.observation}`);
+}
+const result = await agent.stream({ prompt: 'Calculate' }).return();
+```
+
+<ParamField path="options" type="RunOptions">
+  Same options as run() method
+</ParamField>
+
+<ResponseField name="return" type="AsyncGenerator<AgentStep, string | T, void>">
+  Async generator yielding steps, returns final result
+</ResponseField>
+
+**AgentStep Type:**
+
+```typescript
+interface AgentStep {
+  action: {
+    tool: string;        // Tool name
+    toolInput: any;      // Tool arguments
+    log: string;         // Log message
+  };
+  observation: string;   // Tool output
+}
+```
+
+#### getConversationHistory()
+
+Get the agent's conversation history.
+
+```typescript
+const history = agent.getConversationHistory();
+console.log(`${history.length} messages in history`);
+```
+
+<ResponseField name="return" type="BaseMessage[]">
+  Array of conversation messages
+</ResponseField>
+
+#### clearConversationHistory()
+
+Clear the conversation history.
+
+```typescript
+agent.clearConversationHistory();
+```
+
+#### setSystemMessage()
+
+Update the agent's system message.
+
+```typescript
+agent.setSystemMessage('You are a code review expert. Be concise.');
+```
+
+<ParamField path="message" type="string" required>
+  New system message content
+</ParamField>
+
+#### getSystemMessage()
+
+Get the current system message.
+
+```typescript
+const systemMsg = agent.getSystemMessage();
+if (systemMsg) {
+  console.log(systemMsg.content);
+}
+```
+
+<ResponseField name="return" type="SystemMessage | null">
+  Current system message or null
+</ResponseField>
+
+#### setMetadata()
+
+Set metadata for observability traces.
+
+```typescript
+agent.setMetadata({
+  user_id: '123',
+  session_id: 'abc',
+  environment: 'production'
+});
+```
+
+<ParamField path="metadata" type="Record<string, any>" required>
+  Key-value pairs of metadata
+</ParamField>
+
+#### getMetadata()
+
+Get current metadata.
+
+```typescript
+const metadata = agent.getMetadata();
+console.log(metadata);
+```
+
+<ResponseField name="return" type="Record<string, any>">
+  Copy of current metadata object
+</ResponseField>
+
+#### setTags()
+
+Set tags for observability traces.
+
+```typescript
+agent.setTags(['production', 'customer-support', 'high-priority']);
+```
+
+<ParamField path="tags" type="string[]" required>
+  Array of tag strings (duplicates automatically removed)
+</ParamField>
+
+#### getTags()
+
+Get current tags.
+
+```typescript
+const tags = agent.getTags();
+console.log(`Tags: ${tags.join(', ')}`);
+```
+
+<ResponseField name="return" type="string[]">
+  Copy of current tags array
+</ResponseField>
+
+#### setDisallowedTools()
+
+Update the list of disallowed tools.
+
+```typescript
+agent.setDisallowedTools(['delete_file', 'execute_shell']);
+```
+
+<ParamField path="tools" type="string[]" required>
+  Array of tool names to disallow
+</ParamField>
+
+#### getDisallowedTools()
+
+Get current disallowed tools.
+
+```typescript
+const disallowed = agent.getDisallowedTools();
+```
+
+<ResponseField name="return" type="string[]">
+  Array of disallowed tool names
+</ResponseField>
+
+### Properties
+
+#### toolsUsedNames
+
+```typescript
+const usedTools = agent.toolsUsedNames;
+console.log(`Tools used: ${usedTools.join(', ')}`);
+```
+
+Array of tool names that have been used by the agent.
+
+<ResponseField name="type" type="string[]">
+  Tool names used during execution
+</ResponseField>
+
+#### observabilityManager
+
+```typescript
+const manager = agent.observabilityManager;
+```
+
+Manager for observability callbacks and tracing.
+
+<ResponseField name="type" type="ObservabilityManager">
+  Observability manager instance
+</ResponseField>
+
+## Related Types
+
+### MCPAgentOptions
+
+Complete agent configuration:
+
+```typescript
+interface MCPAgentOptions {
+  // LLM (required for local execution)
+  llm?: LanguageModel | string;
+  llmConfig?: LLMConfig;
+  
+  // MCP connections (choose one)
+  client?: MCPClient;
+  connectors?: BaseConnector[];
+  mcpServers?: Record<string, MCPServerConfig>;
+  
+  // Agent behavior
+  maxSteps?: number;
+  memoryEnabled?: boolean;
+  systemPrompt?: string;
+  systemPromptTemplate?: string;
+  additionalInstructions?: string;
+  
+  // Tools
+  disallowedTools?: string[];
+  additionalTools?: StructuredToolInterface[];
+  toolsUsedNames?: string[];
+  
+  // Server management
+  useServerManager?: boolean;
+  serverManagerFactory?: (client: MCPClient) => ServerManager;
+  
+  // Observability
+  verbose?: boolean;
+  observe?: boolean;
+  callbacks?: BaseCallbackHandler[];
+  
+  // Remote execution
+  agentId?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  
+  // Advanced
+  autoInitialize?: boolean;
+  adapter?: LangChainAdapter;
+}
+```
+
+### RunOptions
+
+Options for run() and stream() methods:
+
+```typescript
+interface RunOptions<T = string> {
+  prompt: string;
+  maxSteps?: number;
+  manageConnector?: boolean;
+  externalHistory?: BaseMessage[];
+  schema?: ZodSchema<T>;
+  signal?: AbortSignal;
+}
+```
+
+### LLMConfig
+
+Configuration for LLM creation from string:
+
+```typescript
+interface LLMConfig {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  apiKey?: string;
+  baseUrl?: string;
+  [key: string]: any;
+}
+```
+
+## Examples
+
+### Basic Agent
+
+```typescript
+import { MCPAgent } from 'mcp-use/agents';
+import { MCPClient } from 'mcp-use';
+import { ChatOpenAI } from '@langchain/openai';
+
+const client = new MCPClient({
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    }
+  }
+});
+
+const agent = new MCPAgent({
+  llm: new ChatOpenAI({ model: 'gpt-4' }),
+  client,
+  maxSteps: 10
+});
+
+await agent.initialize();
+const result = await agent.run({ prompt: 'List files in /tmp' });
+console.log(result);
+```
+
+### Simplified Mode
+
+```typescript
+const agent = new MCPAgent({
+  llm: 'openai:gpt-4',
+  mcpServers: {
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    }
+  }
+});
+
+await agent.initialize();
+const result = await agent.run({ prompt: 'What files are here?' });
+```
+
+### Streaming with Progress
+
+```typescript
+let stepCount = 0;
+for await (const step of agent.stream({ prompt: 'Analyze data' })) {
+  stepCount++;
+  console.log(`\nStep ${stepCount}:`);
+  console.log(`Tool: ${step.action.tool}`);
+  console.log(`Args: ${JSON.stringify(step.action.toolInput)}`);
+  console.log(`Result: ${step.observation.slice(0, 100)}...`);
+}
+```
+
+### Structured Output
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.object({
+  summary: z.string(),
+  fileCount: z.number(),
+  largestFile: z.string()
+});
+
+const result = await agent.run({
+  prompt: 'Analyze /tmp directory',
+  schema
+});
+
+console.log(`Summary: ${result.summary}`);
+console.log(`Files: ${result.fileCount}`);
+console.log(`Largest: ${result.largestFile}`);
+```
+
+### With Observability
+
+```typescript
+import { LangfuseCallbackHandler } from 'langfuse-langchain';
+
+const agent = new MCPAgent({
+  llm: new ChatOpenAI({ model: 'gpt-4' }),
+  client,
+  callbacks: [new LangfuseCallbackHandler()]
+});
+
+agent.setMetadata({
+  user_id: '123',
+  session_id: 'abc'
+});
+
+agent.setTags(['production', 'analysis']);
+
+await agent.initialize();
+const result = await agent.run({ prompt: 'Analyze data' });
+```
+
+### Server Manager Mode
+
+```typescript
+const agent = new MCPAgent({
+  llm: new ChatOpenAI({ model: 'gpt-4' }),
+  client,
+  useServerManager: true
+});
+
+await agent.initialize();
+
+// Agent can now dynamically connect to and disconnect from servers
+const result = await agent.run({
+  prompt: 'Connect to weather server and get forecast'
+});
+```
+
+### Conversation Memory
+
+```typescript
+const agent = new MCPAgent({
+  llm: new ChatOpenAI({ model: 'gpt-4' }),
+  client,
+  memoryEnabled: true
+});
+
+await agent.initialize();
+
+// First interaction
+await agent.run({ prompt: 'My name is Alice' });
+
+// Second interaction (remembers context)
+const result = await agent.run({ prompt: 'What is my name?' });
+console.log(result); // "Your name is Alice"
+
+// Clear history
+agent.clearConversationHistory();
+```
+
+## See Also
+
+- [MCPClient API](/typescript/api/client) - Client for connecting to servers
+- [MCPServer API](/typescript/api/server) - Server for building MCP servers
+- [Creating Agents Guide](/guides/creating-agents) - Guide to building agents

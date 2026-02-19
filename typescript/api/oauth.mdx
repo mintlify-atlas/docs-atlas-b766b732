@@ -1,0 +1,545 @@
+---
+title: "OAuth Providers API Reference"
+description: "OAuth provider configuration for MCP server authentication"
+icon: "shield-check"
+---
+
+## Overview
+
+mcp-use provides zero-config OAuth authentication for MCP servers with support for Supabase, Auth0, Keycloak, WorkOS, and custom OAuth providers. All providers support environment variable configuration for easy deployment.
+
+## Provider Functions
+
+### oauthSupabaseProvider()
+
+Create a Supabase OAuth provider.
+
+```typescript
+import { MCPServer, oauthSupabaseProvider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthSupabaseProvider({
+    projectId: process.env.SUPABASE_PROJECT_ID!,
+    jwtSecret: process.env.SUPABASE_JWT_SECRET
+  })
+});
+```
+
+<ParamField path="config" type="Partial<SupabaseProviderConfig>">
+  Optional configuration (uses environment variables if not provided)
+</ParamField>
+
+<ParamField path="config.projectId" type="string" required>
+  Supabase project ID (env: `MCP_USE_OAUTH_SUPABASE_PROJECT_ID`)
+</ParamField>
+
+<ParamField path="config.jwtSecret" type="string">
+  Supabase JWT secret for verification (env: `MCP_USE_OAUTH_SUPABASE_JWT_SECRET`)
+</ParamField>
+
+<ParamField path="config.skipVerification" type="boolean" default="false">
+  Skip JWT verification (not recommended for production)
+</ParamField>
+
+<ResponseField name="return" type="OAuthProvider">
+  Configured Supabase OAuth provider
+</ResponseField>
+
+**Zero-config with environment variables:**
+
+```bash
+export MCP_USE_OAUTH_SUPABASE_PROJECT_ID=your-project-id
+export MCP_USE_OAUTH_SUPABASE_JWT_SECRET=your-jwt-secret
+```
+
+```typescript
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthSupabaseProvider() // Reads from env vars
+});
+```
+
+### oauthAuth0Provider()
+
+Create an Auth0 OAuth provider.
+
+```typescript
+import { MCPServer, oauthAuth0Provider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider({
+    domain: 'my-tenant.auth0.com',
+    audience: 'https://my-api.com'
+  })
+});
+```
+
+<ParamField path="config" type="Partial<Auth0ProviderConfig>">
+  Optional configuration (uses environment variables if not provided)
+</ParamField>
+
+<ParamField path="config.domain" type="string" required>
+  Auth0 domain (env: `MCP_USE_OAUTH_AUTH0_DOMAIN`)
+</ParamField>
+
+<ParamField path="config.audience" type="string" required>
+  Auth0 API audience (env: `MCP_USE_OAUTH_AUTH0_AUDIENCE`)
+</ParamField>
+
+<ParamField path="config.verifyJwt" type="boolean" default="true">
+  Enable JWT verification
+</ParamField>
+
+<ResponseField name="return" type="OAuthProvider">
+  Configured Auth0 OAuth provider
+</ResponseField>
+
+**Environment variables:**
+
+```bash
+export MCP_USE_OAUTH_AUTH0_DOMAIN=my-tenant.auth0.com
+export MCP_USE_OAUTH_AUTH0_AUDIENCE=https://my-api.com
+```
+
+### oauthKeycloakProvider()
+
+Create a Keycloak OAuth provider.
+
+```typescript
+import { MCPServer, oauthKeycloakProvider } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthKeycloakProvider({
+    serverUrl: 'https://keycloak.example.com',
+    realm: 'my-realm',
+    clientId: 'my-client'
+  })
+});
+```
+
+<ParamField path="config" type="Partial<KeycloakProviderConfig>">
+  Optional configuration (uses environment variables if not provided)
+</ParamField>
+
+<ParamField path="config.serverUrl" type="string" required>
+  Keycloak server URL (env: `MCP_USE_OAUTH_KEYCLOAK_SERVER_URL`)
+</ParamField>
+
+<ParamField path="config.realm" type="string" required>
+  Keycloak realm name (env: `MCP_USE_OAUTH_KEYCLOAK_REALM`)
+</ParamField>
+
+<ParamField path="config.clientId" type="string">
+  Keycloak client ID (env: `MCP_USE_OAUTH_KEYCLOAK_CLIENT_ID`)
+</ParamField>
+
+<ParamField path="config.verifyJwt" type="boolean" default="true">
+  Enable JWT verification
+</ParamField>
+
+<ResponseField name="return" type="OAuthProvider">
+  Configured Keycloak OAuth provider
+</ResponseField>
+
+**Environment variables:**
+
+```bash
+export MCP_USE_OAUTH_KEYCLOAK_SERVER_URL=https://keycloak.example.com
+export MCP_USE_OAUTH_KEYCLOAK_REALM=my-realm
+export MCP_USE_OAUTH_KEYCLOAK_CLIENT_ID=my-client
+```
+
+### oauthWorkOSProvider()
+
+Create a WorkOS OAuth provider with Dynamic Client Registration (DCR) support.
+
+```typescript
+import { MCPServer, oauthWorkOSProvider } from 'mcp-use/server';
+
+// Dynamic Client Registration (recommended)
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthWorkOSProvider({
+    subdomain: 'my-company'
+  })
+});
+
+// Pre-registered OAuth Client
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthWorkOSProvider({
+    subdomain: 'my-company',
+    clientId: 'client_01KB5DRXBDDY1VGCBKY108SKJW'
+  })
+});
+```
+
+<ParamField path="config" type="Partial<WorkOSProviderConfig>">
+  Optional configuration (uses environment variables if not provided)
+</ParamField>
+
+<ParamField path="config.subdomain" type="string" required>
+  WorkOS subdomain (env: `MCP_USE_OAUTH_WORKOS_SUBDOMAIN`)
+</ParamField>
+
+<ParamField path="config.clientId" type="string">
+  Pre-registered OAuth client ID (env: `MCP_USE_OAUTH_WORKOS_CLIENT_ID`). Leave empty to use DCR
+</ParamField>
+
+<ParamField path="config.apiKey" type="string">
+  WorkOS API key (env: `MCP_USE_OAUTH_WORKOS_API_KEY`)
+</ParamField>
+
+<ParamField path="config.verifyJwt" type="boolean" default="true">
+  Enable JWT verification
+</ParamField>
+
+<ResponseField name="return" type="OAuthProvider">
+  Configured WorkOS OAuth provider
+</ResponseField>
+
+**OAuth Modes:**
+
+1. **Dynamic Client Registration (DCR)** - Recommended
+   - Don't set `clientId`
+   - MCP clients register themselves automatically
+   - Enable DCR in WorkOS Dashboard under Connect → Configuration
+
+2. **Pre-registered OAuth Client**
+   - Set `clientId` to your OAuth client ID
+   - Create client in WorkOS Dashboard under Connect → OAuth Applications
+   - Configure redirect URIs to match your MCP client
+
+**Environment variables:**
+
+```bash
+export MCP_USE_OAUTH_WORKOS_SUBDOMAIN=my-company
+# Optional: for pre-registered client
+export MCP_USE_OAUTH_WORKOS_CLIENT_ID=client_01KB5DRXBDDY1VGCBKY108SKJW
+export MCP_USE_OAUTH_WORKOS_API_KEY=sk_test_abc123
+```
+
+### oauthCustomProvider()
+
+Create a custom OAuth provider for other identity providers.
+
+```typescript
+import { MCPServer, oauthCustomProvider } from 'mcp-use/server';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: oauthCustomProvider({
+    issuer: 'https://oauth.example.com',
+    jwksUrl: 'https://oauth.example.com/.well-known/jwks.json',
+    authEndpoint: 'https://oauth.example.com/authorize',
+    tokenEndpoint: 'https://oauth.example.com/token',
+    verifyToken: async (token) => {
+      const JWKS = createRemoteJWKSet(new URL('https://oauth.example.com/.well-known/jwks.json'));
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: 'https://oauth.example.com',
+        audience: 'your-api-audience'
+      });
+      return payload;
+    },
+    getUserInfo: (payload) => ({
+      userId: payload.sub as string,
+      email: payload.email as string,
+      name: payload.name as string
+    })
+  })
+});
+```
+
+<ParamField path="config" type="CustomProviderConfig" required>
+  Custom provider configuration
+</ParamField>
+
+<ParamField path="config.issuer" type="string" required>
+  OAuth issuer URL
+</ParamField>
+
+<ParamField path="config.jwksUrl" type="string" required>
+  JWKS endpoint URL for token verification
+</ParamField>
+
+<ParamField path="config.authEndpoint" type="string" required>
+  OAuth authorization endpoint
+</ParamField>
+
+<ParamField path="config.tokenEndpoint" type="string" required>
+  OAuth token endpoint
+</ParamField>
+
+<ParamField path="config.verifyToken" type="(token: string) => Promise<any>" required>
+  Custom token verification function
+</ParamField>
+
+<ParamField path="config.getUserInfo" type="(payload: any) => UserInfo">
+  Extract user info from token payload
+</ParamField>
+
+<ParamField path="config.scopesSupported" type="string[]">
+  Supported OAuth scopes
+</ParamField>
+
+<ParamField path="config.grantTypesSupported" type="string[]">
+  Supported OAuth grant types
+</ParamField>
+
+<ResponseField name="return" type="OAuthProvider">
+  Configured custom OAuth provider
+</ResponseField>
+
+## Utility Functions
+
+### getAuth()
+
+Get authentication information from request context (use inside tool handlers).
+
+```typescript
+import { getAuth, text } from 'mcp-use/server';
+
+server.tool({
+  name: 'get-profile'
+}, async () => {
+  const auth = getAuth();
+  if (!auth) {
+    return text('Not authenticated');
+  }
+  return text(`Hello, ${auth.user.email}`);
+});
+```
+
+<ResponseField name="return" type="AuthInfo | null">
+  Authentication information or null if not authenticated
+</ResponseField>
+
+### hasScope()
+
+Check if user has a specific OAuth scope.
+
+```typescript
+import { hasScope, error, text } from 'mcp-use/server';
+
+server.tool({
+  name: 'admin-action'
+}, async () => {
+  if (!hasScope('admin:write')) {
+    return error('Insufficient permissions');
+  }
+  return text('Action performed');
+});
+```
+
+<ParamField path="scope" type="string" required>
+  Required OAuth scope
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if user has the scope
+</ResponseField>
+
+### hasAnyScope()
+
+Check if user has any of the specified scopes.
+
+```typescript
+import { hasAnyScope } from 'mcp-use/server';
+
+if (hasAnyScope(['read:data', 'write:data', 'admin:all'])) {
+  // User has at least one of these scopes
+}
+```
+
+<ParamField path="scopes" type="string[]" required>
+  Array of acceptable scopes
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if user has any of the scopes
+</ResponseField>
+
+### requireScope()
+
+Throw error if user doesn't have required scope.
+
+```typescript
+import { requireScope, text } from 'mcp-use/server';
+
+server.tool({
+  name: 'delete-resource'
+}, async () => {
+  requireScope('resources:delete');
+  // Throws error if scope missing
+  return text('Resource deleted');
+});
+```
+
+<ParamField path="scope" type="string" required>
+  Required OAuth scope
+</ParamField>
+
+**Throws:** `McpError` with code `ErrorCode.Forbidden` if scope missing
+
+### requireAnyScope()
+
+Throw error if user doesn't have any of the required scopes.
+
+```typescript
+import { requireAnyScope } from 'mcp-use/server';
+
+server.tool({
+  name: 'access-data'
+}, async () => {
+  requireAnyScope(['read:data', 'admin:all']);
+  // Throws error if no matching scope
+});
+```
+
+<ParamField path="scopes" type="string[]" required>
+  Array of acceptable scopes
+</ParamField>
+
+**Throws:** `McpError` with code `ErrorCode.Forbidden` if no matching scope
+
+## Type Definitions
+
+### OAuthProvider
+
+Base OAuth provider interface:
+
+```typescript
+interface OAuthProvider {
+  provider: string;
+  verifyToken(token: string): Promise<any>;
+  getUserInfo(payload: any): UserInfo;
+  getMetadata(): Promise<any>;
+}
+```
+
+### AuthInfo
+
+Authentication information:
+
+```typescript
+interface AuthInfo {
+  user: UserInfo;
+  scopes?: string[];
+}
+```
+
+### UserInfo
+
+User information extracted from token:
+
+```typescript
+interface UserInfo {
+  userId: string;
+  email?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+```
+
+## Examples
+
+### Basic Authentication
+
+```typescript
+import { MCPServer, oauthSupabaseProvider, text } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'protected-server',
+  version: '1.0.0',
+  oauth: oauthSupabaseProvider()
+});
+
+server.tool({
+  name: 'get-data'
+}, async (args, ctx) => {
+  // ctx.auth automatically contains authenticated user
+  return text(`Hello, ${ctx.auth.user.email}`);
+});
+
+await server.listen({ port: 3000 });
+```
+
+### Scope-Based Authorization
+
+```typescript
+import { MCPServer, oauthAuth0Provider, requireScope, text } from 'mcp-use/server';
+
+const server = new MCPServer({
+  name: 'api-server',
+  version: '1.0.0',
+  oauth: oauthAuth0Provider()
+});
+
+server.tool({
+  name: 'read-data',
+  description: 'Read data (requires read scope)'
+}, async () => {
+  requireScope('data:read');
+  const data = await fetchData();
+  return object(data);
+});
+
+server.tool({
+  name: 'write-data',
+  description: 'Write data (requires write scope)'
+}, async ({ content }) => {
+  requireScope('data:write');
+  await saveData(content);
+  return text('Data saved');
+});
+
+server.tool({
+  name: 'admin-action',
+  description: 'Admin action (requires read or write)'
+}, async () => {
+  requireAnyScope(['data:read', 'data:write', 'admin:all']);
+  return text('Action performed');
+});
+```
+
+### Multiple Providers (Environment-Based)
+
+```typescript
+const getOAuthProvider = () => {
+  const provider = process.env.OAUTH_PROVIDER;
+  
+  switch (provider) {
+    case 'supabase':
+      return oauthSupabaseProvider();
+    case 'auth0':
+      return oauthAuth0Provider();
+    case 'keycloak':
+      return oauthKeycloakProvider();
+    default:
+      throw new Error('No OAuth provider configured');
+  }
+};
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0',
+  oauth: getOAuthProvider()
+});
+```
+
+## See Also
+
+- [MCPServer API](/typescript/api/server) - Server configuration
+- [Authentication Guide](/guides/authentication) - Complete authentication setup
+- [Deployment Guide](/deployment/overview) - Deploying with OAuth

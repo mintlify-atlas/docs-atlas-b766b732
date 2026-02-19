@@ -1,0 +1,452 @@
+---
+title: 'Prompts'
+description: 'Create reusable prompt templates'
+icon: 'message'
+---
+
+# Prompts
+
+Prompts are reusable templates that AI models can query to get structured instructions. They're particularly useful for defining workflows, providing context, or generating consistent messaging.
+
+## Basic Prompt
+
+```typescript
+import { MCPServer, text } from 'mcp-use/server';
+import { z } from 'zod';
+
+const server = new MCPServer({
+  name: 'my-server',
+  version: '1.0.0'
+});
+
+server.prompt(
+  {
+    name: 'code-review',
+    description: 'Generate code review instructions',
+    schema: z.object({
+      language: z.string(),
+      focusAreas: z.array(z.string()).optional()
+    })
+  },
+  async ({ language, focusAreas }) => {
+    const areas = focusAreas || ['bugs', 'performance', 'readability'];
+    
+    return text(`
+You are a ${language} code reviewer. Please review the code with focus on:
+
+${areas.map((area, i) => `${i + 1}. ${area}`).join('\n')}
+
+Provide specific, actionable feedback.
+    `);
+  }
+);
+```
+
+## Prompt Definition
+
+### Required Fields
+
+<ParamField path="name" type="string" required>
+  Unique identifier for the prompt
+</ParamField>
+
+<ParamField path="description" type="string">
+  What the prompt does
+</ParamField>
+
+<ParamField path="schema" type="ZodObject">
+  Zod schema for input arguments
+</ParamField>
+
+### Optional Fields
+
+<ParamField path="title" type="string">
+  Human-readable display name
+</ParamField>
+
+<ParamField path="args" type="InputDefinition[]">
+  Legacy input definitions (use schema instead)
+</ParamField>
+
+## Response Formats
+
+### Text Prompt
+
+```typescript
+server.prompt(
+  {
+    name: 'greeting',
+    schema: z.object({
+      name: z.string(),
+      role: z.string()
+    })
+  },
+  async ({ name, role }) => {
+    return text(`Hello ${name}! As a ${role}, you have access to...`);
+  }
+);
+```
+
+### Structured Prompt
+
+Return messages with roles:
+
+```typescript
+import { object } from 'mcp-use/server';
+
+server.prompt(
+  {
+    name: 'conversation-starter',
+    schema: z.object({
+      topic: z.string()
+    })
+  },
+  async ({ topic }) => {
+    return object({
+      messages: [
+        {
+          role: 'system',
+          content: { type: 'text', text: 'You are a helpful assistant' }
+        },
+        {
+          role: 'user',
+          content: { type: 'text', text: `Let's discuss ${topic}` }
+        }
+      ]
+    });
+  }
+);
+```
+
+### Markdown Prompt
+
+```typescript
+import { markdown } from 'mcp-use/server';
+
+server.prompt(
+  {
+    name: 'documentation',
+    schema: z.object({
+      component: z.string()
+    })
+  },
+  async ({ component }) => {
+    return markdown(`
+# ${component} Documentation
+
+## Overview
+This component provides...
+
+## Usage
+\`\`\`typescript
+import { ${component} } from './components';
+\`\`\`
+    `);
+  }
+);
+```
+
+## Dynamic Prompts
+
+Generate prompts based on context:
+
+```typescript
+server.prompt(
+  {
+    name: 'task-breakdown',
+    description: 'Break down a task into steps',
+    schema: z.object({
+      task: z.string(),
+      complexity: z.enum(['simple', 'medium', 'complex'])
+    })
+  },
+  async ({ task, complexity }) => {
+    const stepCount = {
+      simple: 3,
+      medium: 5,
+      complex: 8
+    }[complexity];
+    
+    return text(`
+Break down this task into exactly ${stepCount} actionable steps:
+
+Task: ${task}
+
+Provide:
+1. Clear step descriptions
+2. Expected outcomes
+3. Potential blockers
+    `);
+  }
+);
+```
+
+## Context Access
+
+Access request context in prompts:
+
+```typescript
+server.prompt(
+  {
+    name: 'personalized-workflow',
+    description: 'Generate workflow for current user'
+  },
+  async (params, ctx) => {
+    // OAuth user info
+    const user = ctx.auth.user;
+    
+    return text(`
+Create a workflow for ${user.name} (${user.email}):
+
+- Consider their role: ${user.role}
+- Adapt to their experience level
+- Include relevant tools they have access to
+    `);
+  }
+);
+```
+
+## Multi-Message Prompts
+
+Return conversation-style prompts:
+
+```typescript
+server.prompt(
+  {
+    name: 'debate-setup',
+    schema: z.object({
+      topic: z.string(),
+      positions: z.array(z.string())
+    })
+  },
+  async ({ topic, positions }) => {
+    return object({
+      messages: [
+        {
+          role: 'system',
+          content: {
+            type: 'text',
+            text: `You are moderating a debate on: ${topic}`
+          }
+        },
+        ...positions.map((position, i) => ({
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Participant ${i + 1} argues: ${position}`
+          }
+        }))
+      ]
+    });
+  }
+);
+```
+
+## Conditional Prompts
+
+```typescript
+server.prompt(
+  {
+    name: 'language-specific-task',
+    schema: z.object({
+      language: z.string(),
+      taskType: z.enum(['debug', 'optimize', 'document'])
+    })
+  },
+  async ({ language, taskType }) => {
+    const instructions = {
+      debug: `Find and fix bugs in this ${language} code`,
+      optimize: `Improve performance of this ${language} code`,
+      document: `Add comprehensive documentation to this ${language} code`
+    };
+    
+    const languageSpecifics = {
+      'python': 'Follow PEP 8 style guide',
+      'javascript': 'Use ES6+ features',
+      'rust': 'Ensure memory safety'
+    };
+    
+    return text(`
+${instructions[taskType]}
+
+${languageSpecifics[language] || 'Follow language best practices'}
+    `);
+  }
+);
+```
+
+## Use Cases
+
+### Workflow Templates
+
+```typescript
+server.prompt(
+  {
+    name: 'feature-development',
+    schema: z.object({
+      feature: z.string(),
+      team: z.string()
+    })
+  },
+  async ({ feature, team }) => {
+    return text(`
+Develop ${feature} following ${team}'s workflow:
+
+1. Write failing tests
+2. Implement feature
+3. Add documentation
+4. Submit for review
+5. Address feedback
+6. Merge to main
+
+Ensure all steps are completed before moving to the next.
+    `);
+  }
+);
+```
+
+### Code Generation
+
+```typescript
+server.prompt(
+  {
+    name: 'api-endpoint',
+    schema: z.object({
+      method: z.enum(['GET', 'POST', 'PUT', 'DELETE']),
+      path: z.string(),
+      description: z.string()
+    })
+  },
+  async ({ method, path, description }) => {
+    return text(`
+Generate a ${method} ${path} endpoint that ${description}
+
+Include:
+- Request validation
+- Error handling
+- Response formatting
+- Tests
+    `);
+  }
+);
+```
+
+### Analysis Tasks
+
+```typescript
+server.prompt(
+  {
+    name: 'security-audit',
+    schema: z.object({
+      codeType: z.string(),
+      concerns: z.array(z.string())
+    })
+  },
+  async ({ codeType, concerns }) => {
+    return markdown(`
+# Security Audit for ${codeType}
+
+## Focus Areas
+${concerns.map(c => `- ${c}`).join('\n')}
+
+## Checklist
+- [ ] Input validation
+- [ ] SQL injection prevention
+- [ ] XSS protection
+- [ ] Authentication/Authorization
+- [ ] Sensitive data handling
+    `);
+  }
+);
+```
+
+## Best Practices
+
+### 1. Clear Instructions
+
+```typescript
+// Good - specific and actionable
+server.prompt(
+  { name: 'review' },
+  async () => text(`
+Review this code for:
+1. Correctness - Does it work as intended?
+2. Performance - Any bottlenecks?
+3. Security - Any vulnerabilities?
+  `)
+);
+
+// Bad - vague
+server.prompt(
+  { name: 'review' },
+  async () => text('Review this code')
+);
+```
+
+### 2. Parameterization
+
+Make prompts flexible:
+
+```typescript
+// Good - parameterized
+server.prompt({
+  name: 'task',
+  schema: z.object({
+    style: z.enum(['detailed', 'brief']),
+    language: z.string()
+  })
+});
+
+// Less flexible - hardcoded
+server.prompt({
+  name: 'task'
+  // No parameters
+});
+```
+
+### 3. Structured Output
+
+Provide clear formatting:
+
+```typescript
+// Good - structured
+return text(`
+Objective: ...
+
+Steps:
+1. ...
+2. ...
+
+Expected Output: ...
+`);
+
+// Less good - unstructured
+return text('Do this task');
+```
+
+## Testing Prompts
+
+Use the Inspector UI to test prompts:
+
+1. Start your server
+2. Open `http://localhost:3000`
+3. Navigate to "Prompts" tab
+4. Select a prompt and provide arguments
+5. View the generated prompt
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Widgets" icon="window" href="/typescript/server/widgets">
+    Create interactive UIs
+  </Card>
+  <Card title="Sampling" icon="sparkles" href="/typescript/server/sampling">
+    Request LLM completions
+  </Card>
+  <Card title="OAuth" icon="lock" href="/typescript/server/oauth">
+    Add authentication
+  </Card>
+  <Card title="API Reference" icon="book" href="/typescript/api/server">
+    Complete API docs
+  </Card>
+</CardGroup>

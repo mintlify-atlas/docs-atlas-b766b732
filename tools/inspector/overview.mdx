@@ -1,0 +1,162 @@
+---
+title: 'Inspector Overview'
+description: 'Interactive developer tool for testing and debugging MCP servers with support for widgets and real-time monitoring'
+icon: 'magnifying-glass'
+---
+
+# MCP Inspector
+
+The **MCP Inspector** is an open-source, interactive developer tool for testing and debugging MCP servers. It provides a beautiful, intuitive interface for testing tools, exploring resources, managing prompts, and monitoring server connections - all from your browser.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Auto-Mount" icon="bolt">
+    Automatically available at `/inspector` for all mcp-use servers
+  </Card>
+  <Card title="Multi-Connection" icon="plug">
+    Connect to and manage multiple MCP servers simultaneously
+  </Card>
+  <Card title="Interactive Testing" icon="flask">
+    Test tools with live execution and real-time results
+  </Card>
+  <Card title="Real-time Status" icon="chart-line">
+    Monitor connection states, errors, and server health
+  </Card>
+  <Card title="OAuth Support" icon="lock">
+    Built-in OAuth flow handling with popup authentication
+  </Card>
+  <Card title="Widget Support" icon="palette">
+    Full support for MCP-UI and OpenAI Apps SDK widgets
+  </Card>
+  <Card title="BYOK Chat" icon="comment">
+    Bring Your Own Key chat interface for testing
+  </Card>
+  <Card title="Saved Tool Calls" icon="floppy-disk">
+    Save and replay tool executions for repeated testing
+  </Card>
+</CardGroup>
+
+## Three Ways to Use
+
+There are three ways to access the MCP Inspector:
+
+### 1. Online Version (Recommended for Testing)
+
+Visit [inspector.mcp-use.com](https://inspector.mcp-use.com/inspector) - no installation required!
+
+Perfect for quick testing and exploring MCP servers without any setup.
+
+### 2. Run Locally with NPX
+
+```bash
+npx @mcp-use/inspector
+```
+
+Opens the inspector in your browser at `http://localhost:8080`. Great for development when you need local access.
+
+<Accordion title="CLI Options">
+  ```bash
+  # Auto-connect to a server
+  npx @mcp-use/inspector --url http://localhost:3000/mcp
+
+  # Use custom port
+  npx @mcp-use/inspector --port 9000
+
+  # Combine both
+  npx @mcp-use/inspector --url http://localhost:3000/mcp --port 9000
+  ```
+</Accordion>
+
+### 3. Auto-mounted with mcp-use Servers
+
+When you create an MCP server with `mcp-use`, the inspector is automatically available at `/inspector`:
+
+```typescript
+import { MCPServer } from "mcp-use/server";
+
+const server = new MCPServer({
+  name: "my-server",
+  version: "1.0.0",
+});
+
+server.listen(3000);
+// Inspector automatically available at http://localhost:3000/inspector
+```
+
+This is the most convenient option for development as it's always available alongside your server.
+
+## What Can You Test?
+
+The inspector provides comprehensive testing capabilities for all MCP features:
+
+<AccordionGroup>
+  <Accordion title="Tools" icon="wrench">
+    - Browse all available tools with names and descriptions
+    - View detailed JSON schemas for tool parameters
+    - Execute tools with custom JSON input
+    - View real-time results with syntax highlighting
+    - Save tool calls for repeated testing
+    - Test MCP-UI and OpenAI Apps SDK widget responses
+  </Accordion>
+
+  <Accordion title="Resources" icon="folder-open">
+    - View all available resources with metadata
+    - Copy resource URIs for use in applications
+    - Check MIME types and resource properties
+    - Preview resource content with syntax highlighting
+  </Accordion>
+
+  <Accordion title="Prompts" icon="message">
+    - Browse available prompts with descriptions
+    - View prompt schemas and required arguments
+    - Fill in prompt arguments using form interface
+    - Render prompts and copy output
+  </Accordion>
+
+  <Accordion title="Elicitation" icon="question">
+    - Handle tool requests that require user input
+    - Fill and submit form-mode responses
+    - Accept, decline, or cancel requests
+    - Support for text, number, boolean, and enum fields
+  </Accordion>
+
+  <Accordion title="Chat" icon="comments">
+    - Test MCP server with real LLM interactions
+    - Bring Your Own Key (BYOK) for OpenAI, Anthropic, etc.
+    - Watch tool calls in real-time
+    - View detailed execution logs
+    - Track how the MCP server processes requests
+  </Accordion>
+</AccordionGroup>
+
+## Privacy & Security
+
+<Info>
+  All authentication tokens, credentials, and API keys are stored **locally in your browser's localStorage**.
+  Nothing is sent to external servers - everything stays on your device.
+</Info>
+
+The inspector is designed with privacy in mind:
+
+- **Local Storage**: All connection data stored in browser
+- **No Cloud Sync**: Your data never leaves your machine
+- **Client-Side Only**: All requests go directly from your browser to MCP servers
+- **Self-Hosting**: Deploy your own instance for full control
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" icon="rocket" href="/tools/inspector/getting-started">
+    Learn how to connect to MCP servers and explore their features
+  </Card>
+  <Card title="Features" icon="sparkles" href="/tools/inspector/features">
+    Deep dive into testing tools, resources, prompts, and chat
+  </Card>
+  <Card title="CLI Usage" icon="terminal" href="/tools/inspector/cli">
+    Run the inspector locally with command-line options
+  </Card>
+  <Card title="Self-Hosting" icon="server" href="/tools/inspector/self-hosting">
+    Deploy your own inspector instance with Docker
+  </Card>
+</CardGroup>

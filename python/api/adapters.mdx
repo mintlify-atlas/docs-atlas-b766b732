@@ -1,0 +1,139 @@
+---
+title: "Adapters API Reference"
+description: "LangChain adapter API documentation"
+icon: "book"
+---
+
+## LangChainAdapter
+
+Adapter for converting MCP tools to LangChain tools.
+
+### Constructor
+
+```python
+LangChainAdapter(
+    disallowed_tools: list[str] | None = None
+)
+```
+
+<ParamField path="disallowed_tools" type="list[str]">
+  List of tool names to exclude
+</ParamField>
+
+### Methods
+
+#### create_all()
+
+```python
+async def create_all(client: MCPClient) -> None
+```
+
+Create all tools, resources, and prompts from a client.
+
+```python
+adapter = LangChainAdapter()
+await adapter.create_all(client)
+
+tools = adapter.tools
+resources = adapter.resources
+prompts = adapter.prompts
+```
+
+#### create_tools()
+
+```python
+async def create_tools(
+    client: MCPClient
+) -> list[BaseTool]
+```
+
+Create LangChain tools from MCP client.
+
+```python
+adapter = LangChainAdapter()
+tools = await adapter.create_tools(client)
+
+for tool in tools:
+    print(f"Tool: {tool.name}")
+```
+
+### Properties
+
+#### tools
+
+```python
+@property
+def tools() -> list[BaseTool]
+```
+
+List of converted LangChain tools.
+
+#### resources
+
+```python
+@property
+def resources() -> list[BaseTool]
+```
+
+List of resources as LangChain tools.
+
+#### prompts
+
+```python
+@property
+def prompts() -> list[BaseTool]
+```
+
+List of prompts as LangChain tools.
+
+## Usage Example
+
+```python
+from mcp_use import MCPClient
+from mcp_use.agents.adapters.langchain_adapter import LangChainAdapter
+from langchain_openai import ChatOpenAI
+
+client = MCPClient.from_config_file("config.json")
+await client.create_all_sessions()
+
+# Create adapter
+adapter = LangChainAdapter(disallowed_tools=["dangerous_tool"])
+await adapter.create_all(client)
+
+# Use tools with LangChain
+llm = ChatOpenAI(model="gpt-4o")
+tools = adapter.tools
+
+llm_with_tools = llm.bind_tools(tools)
+result = await llm_with_tools.ainvoke("What tools do you have?")
+print(result)
+```
+
+## Custom Tool Creation
+
+Create custom tools for specific use cases:
+
+```python
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
+class CustomToolInput(BaseModel):
+    param: str = Field(description="Parameter description")
+
+class CustomTool(BaseTool):
+    name = "custom_tool"
+    description = "Custom tool description"
+    args_schema = CustomToolInput
+    
+    def _run(self, param: str) -> str:
+        return f"Result: {param}"
+    
+    async def _arun(self, param: str) -> str:
+        return self._run(param)
+
+# Use with adapter tools
+adapter = LangChainAdapter()
+await adapter.create_all(client)
+
+all_tools = adapter.tools + [CustomTool()]
+```

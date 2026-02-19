@@ -1,0 +1,393 @@
+---
+title: "Connecting to Servers"
+description: "Establish and manage connections to MCP servers"
+icon: "link"
+---
+
+## Connection Overview
+
+MCPClient manages connections to one or more MCP servers. Each connection is represented by a session that handles communication through a connector.
+
+## Basic Connection
+
+Connect to a single server:
+
+```python
+import asyncio
+from mcp_use import MCPClient
+
+config = {
+    "mcpServers": {
+        "my-server": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-everything"]
+        }
+    }
+}
+
+async def main():
+    client = MCPClient(config=config)
+    
+    # Create and initialize session
+    await client.create_all_sessions()
+    
+    # Get the session
+    session = client.get_session("my-server")
+    
+    # Use the session
+    tools = await session.list_tools()
+    print(f"Available tools: {[t.name for t in tools]}")
+    
+    # Clean up
+    await client.close_all_sessions()
+
+asyncio.run(main())
+```
+
+## Connection Methods
+
+### create_all_sessions()
+
+Create sessions for all configured servers:
+
+```python
+client = MCPClient.from_config_file("config.json")
+
+# Initialize all servers
+sessions = await client.create_all_sessions()
+
+# Sessions is a dict: {"server-name": MCPSession}
+print(f"Connected to {len(sessions)} servers")
+```
+
+### create_session()
+
+Create a single server session:
+
+```python
+client = MCPClient.from_config_file("config.json")
+
+# Connect to specific server
+session = await client.create_session(
+    "server-name",
+    auto_initialize=True  # Automatically call initialize()
+)
+
+tools = await session.list_tools()
+```
+
+### Manual Initialization
+
+Control initialization timing:
+
+```python
+# Create session without initializing
+session = await client.create_session(
+    "server-name",
+    auto_initialize=False
+)
+
+# Initialize later
+await session.initialize()
+```
+
+## Connection Lifecycle
+
+### 1. Create Client
+
+```python
+client = MCPClient.from_config_file("config.json")
+```
+
+### 2. Connect to Servers
+
+```python
+await client.create_all_sessions()
+```
+
+### 3. Use Sessions
+
+```python
+session = client.get_session("server-name")
+result = await session.call_tool("tool_name", {})
+```
+
+### 4. Close Connections
+
+```python
+await client.close_all_sessions()
+```
+
+## Multiple Server Connections
+
+Connect to multiple servers:
+
+```python
+config = {
+    "mcpServers": {
+        "browser": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"]
+        },
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+        },
+        "api": {
+            "url": "http://localhost:8000/mcp"
+        }
+    }
+}
+
+client = MCPClient(config=config)
+await client.create_all_sessions()
+
+# Use different servers
+browser = client.get_session("browser")
+fs = client.get_session("filesystem")
+api = client.get_session("api")
+
+# Call tools from different servers
+await browser.call_tool("navigate", {"url": "https://example.com"})
+await fs.call_tool("write_file", {"path": "/tmp/test.txt", "content": "test"})
+await api.call_tool("fetch_data", {})
+
+await client.close_all_sessions()
+```
+
+## Selective Server Connections
+
+Connect to specific servers only:
+
+```python
+config = {
+    "mcpServers": {
+        "server1": {"command": "npx", "args": ["package1"]},
+        "server2": {"command": "npx", "args": ["package2"]},
+        "server3": {"command": "npx", "args": ["package3"]}
+    }
+}
+
+# Only connect to server1 and server2
+client = MCPClient(
+    config=config,
+    allowed_servers=["server1", "server2"]
+)
+
+await client.create_all_sessions()
+# Only server1 and server2 are connected
+```
+
+## Connection Status
+
+Check connection status:
+
+```python
+session = client.get_session("server-name")
+
+# Check if connected
+if session.is_connected:
+    print("Connected")
+else:
+    print("Disconnected")
+
+# Get session info
+if session.session_info:
+    print(f"Server capabilities: {session.session_info['capabilities']}")
+```
+
+## Automatic Reconnection
+
+Sessions automatically reconnect on connection loss:
+
+```python
+session = client.get_session("server-name")
+
+try:
+    # If connection is lost, session will attempt to reconnect
+    result = await session.call_tool("tool_name", {})
+except RuntimeError as e:
+    print(f"Failed to reconnect: {e}")
+```
+
+## Error Handling
+
+Handle connection errors:
+
+```python
+import asyncio
+from mcp_use import MCPClient
+
+async def connect_with_retry(max_retries=3):
+    client = MCPClient.from_config_file("config.json")
+    
+    for attempt in range(max_retries):
+        try:
+            await client.create_all_sessions()
+            print("Connected successfully")
+            return client
+        except Exception as e:
+            print(f"Connection attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise
+    
+    return None
+
+client = await connect_with_retry()
+if client:
+    # Use client
+    await client.close_all_sessions()
+```
+
+## Connection Callbacks
+
+Handle server messages and events:
+
+```python
+from mcp.types import ServerNotification
+
+async def message_handler(message):
+    """Handle messages from server"""
+    if isinstance(message, ServerNotification):
+        print(f"Server notification: {message.root}")
+
+async def logging_callback(level, message, data=None):
+    """Handle server log messages"""
+    print(f"[{level}] {message}")
+    if data:
+        print(f"  Data: {data}")
+
+client = MCPClient(
+    config=config,
+    message_handler=message_handler,
+    logging_callback=logging_callback
+)
+
+await client.create_all_sessions()
+```
+
+## Context Manager Pattern
+
+Use context managers for automatic cleanup:
+
+```python
+class ManagedMCPClient:
+    def __init__(self, config):
+        self.config = config
+        self.client = None
+    
+    async def __aenter__(self):
+        self.client = MCPClient(config=self.config)
+        await self.client.create_all_sessions()
+        return self.client
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.close_all_sessions()
+
+# Usage
+async def main():
+    async with ManagedMCPClient(config) as client:
+        session = client.get_session("server-name")
+        result = await session.call_tool("tool_name", {})
+        print(result.content[0].text)
+    # Automatically cleaned up
+
+asyncio.run(main())
+```
+
+## Dynamic Server Management
+
+Add and remove servers at runtime:
+
+```python
+client = MCPClient(config={"mcpServers": {}})
+
+# Add a server dynamically
+client.add_server("new-server", {
+    "command": "npx",
+    "args": ["-y", "package-name"]
+})
+
+# Connect to it
+await client.create_session("new-server")
+
+# Use it
+session = client.get_session("new-server")
+result = await session.call_tool("tool_name", {})
+
+# Close and remove
+await client.close_session("new-server")
+client.remove_server("new-server")
+```
+
+## Connection Timeouts
+
+Configure connection timeouts for HTTP servers:
+
+```json
+{
+  "mcpServers": {
+    "api": {
+      "url": "http://localhost:8000/mcp",
+      "timeout": 30,
+      "sse_read_timeout": 300
+    }
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Close Sessions">
+    Always close sessions when done:
+    ```python
+    try:
+        await client.create_all_sessions()
+        # Use client
+    finally:
+        await client.close_all_sessions()
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Connection Errors">
+    Wrap connections in try-catch:
+    ```python
+    try:
+        await client.create_all_sessions()
+    except RuntimeError as e:
+        print(f"Connection failed: {e}")
+    ```
+  </Accordion>
+
+  <Accordion title="Check Connection Status">
+    Verify connection before use:
+    ```python
+    if session.is_connected:
+        result = await session.call_tool("tool", {})
+    ```
+  </Accordion>
+
+  <Accordion title="Use Context Managers">
+    Prefer context managers for automatic cleanup:
+    ```python
+    async with ManagedMCPClient(config) as client:
+        # Use client
+    # Auto-cleanup
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sessions" icon="network-wired" href="/python/client/sessions">
+    Work with client sessions
+  </Card>
+  <Card title="API Reference" icon="book" href="/python/api/client">
+    Complete client API documentation
+  </Card>
+</CardGroup>

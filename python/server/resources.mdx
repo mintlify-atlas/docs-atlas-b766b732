@@ -1,0 +1,396 @@
+---
+title: "Server Resources"
+description: "Expose data and content as MCP resources"
+icon: "database"
+---
+
+## What are Resources?
+
+Resources represent read-only data that AI agents can access. They can be files, database records, API responses, or any other content. Resources are identified by URIs and can support both static and template-based (parameterized) access.
+
+## Basic Resource
+
+```python
+from mcp_use import MCPServer
+import json
+
+server = MCPServer(name="my-server")
+
+@server.resource(
+    uri="data://config",
+    name="config",
+    description="Server configuration",
+    mime_type="application/json"
+)
+async def get_config() -> str:
+    """Get server configuration"""
+    return json.dumps({
+        "version": "1.0.0",
+        "env": "production"
+    })
+```
+
+## Resource Decorator Options
+
+<ParamField path="uri" type="str" required>
+  Resource URI (e.g., `data://users`, `file:///path/to/file`)
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Unique identifier for the resource
+</ParamField>
+
+<ParamField path="title" type="str">
+  Human-readable title
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description of the resource content
+</ParamField>
+
+<ParamField path="mime_type" type="str">
+  MIME type of the content (e.g., `text/plain`, `application/json`)
+</ParamField>
+
+## Static Resources
+
+Simple resources that return fixed or dynamic content:
+
+```python
+from datetime import datetime
+import json
+
+@server.resource(
+    uri="time://current",
+    name="current_time",
+    title="Current Time",
+    description="Returns the current server time",
+    mime_type="application/json"
+)
+async def current_time() -> str:
+    """Get current time"""
+    return json.dumps({
+        "timestamp": datetime.now().isoformat(),
+        "timezone": "UTC"
+    })
+```
+
+## Template Resources
+
+Resources with URI parameters for dynamic content:
+
+```python
+@server.resource(
+    uri="user://{user_id}",
+    name="user_profile",
+    description="Get user profile by ID",
+    mime_type="application/json"
+)
+async def get_user_profile(user_id: str) -> str:
+    """Get user profile by ID"""
+    # Fetch user from database
+    user = fetch_user(user_id)
+    return json.dumps({
+        "id": user_id,
+        "name": user.name,
+        "email": user.email
+    })
+```
+
+### Multiple Parameters
+
+```python
+@server.resource(
+    uri="repo://{owner}/{repo}/issues",
+    name="repo_issues",
+    description="Get repository issues",
+    mime_type="application/json"
+)
+async def get_repo_issues(owner: str, repo: str) -> str:
+    """Get GitHub repository issues"""
+    issues = fetch_github_issues(owner, repo)
+    return json.dumps(issues)
+```
+
+## File Resources
+
+Serve files as resources:
+
+```python
+import os
+
+@server.resource(
+    uri="file://{file_path}",
+    name="file_content",
+    description="Read file contents",
+    mime_type="text/plain"
+)
+async def read_file(file_path: str) -> str:
+    """Read file contents"""
+    # Validate file path to prevent directory traversal
+    safe_path = os.path.normpath(file_path)
+    if ".." in safe_path:
+        raise ValueError("Invalid file path")
+    
+    with open(safe_path, "r") as f:
+        return f.read()
+```
+
+## Database Resources
+
+Expose database content:
+
+```python
+import asyncpg
+import json
+
+@server.resource(
+    uri="db://users",
+    name="all_users",
+    description="List all users from database",
+    mime_type="application/json"
+)
+async def list_all_users() -> str:
+    """Get all users from database"""
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+    rows = await conn.fetch("SELECT id, name, email FROM users")
+    await conn.close()
+    
+    users = [dict(row) for row in rows]
+    return json.dumps(users)
+
+@server.resource(
+    uri="db://users/{user_id}",
+    name="user_by_id",
+    description="Get specific user by ID",
+    mime_type="application/json"
+)
+async def get_user(user_id: str) -> str:
+    """Get user by ID"""
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+    row = await conn.fetchrow(
+        "SELECT id, name, email FROM users WHERE id = $1",
+        int(user_id)
+    )
+    await conn.close()
+    
+    if not row:
+        raise ValueError(f"User {user_id} not found")
+    
+    return json.dumps(dict(row))
+```
+
+## API Resources
+
+Proxy external APIs as resources:
+
+```python
+import httpx
+
+@server.resource(
+    uri="api://weather/{city}",
+    name="weather_data",
+    description="Get weather for a city",
+    mime_type="application/json"
+)
+async def get_weather(city: str) -> str:
+    """Get weather data for a city"""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.weather.com/v1/current",
+            params={"city": city}
+        )
+        return response.text
+```
+
+## Resource Subscriptions
+
+Notify clients when resources change:
+
+```python
+from mcp_use import MCPServer
+
+server = MCPServer(name="my-server")
+
+@server.resource(
+    uri="data://live-feed",
+    name="live_feed",
+    description="Real-time data feed"
+)
+async def get_live_feed() -> str:
+    """Get current live feed data"""
+    return get_current_feed_data()
+
+# When data changes, notify subscribers
+async def update_feed():
+    """Update feed and notify subscribers"""
+    update_feed_data()
+    await server.notify_resource_updated("data://live-feed")
+```
+
+## MIME Types
+
+Common MIME types for resources:
+
+```python
+# JSON data
+mime_type="application/json"
+
+# Plain text
+mime_type="text/plain"
+
+# HTML
+mime_type="text/html"
+
+# Markdown
+mime_type="text/markdown"
+
+# CSV
+mime_type="text/csv"
+
+# XML
+mime_type="application/xml"
+
+# Binary data
+mime_type="application/octet-stream"
+
+# Images
+mime_type="image/png"
+mime_type="image/jpeg"
+```
+
+## Error Handling
+
+Handle errors gracefully in resources:
+
+```python
+@server.resource(
+    uri="data://item/{item_id}",
+    name="item",
+    description="Get item by ID"
+)
+async def get_item(item_id: str) -> str:
+    """Get item by ID"""
+    try:
+        item_id_int = int(item_id)
+    except ValueError:
+        raise ValueError(f"Invalid item ID: {item_id}")
+    
+    item = fetch_item(item_id_int)
+    if not item:
+        raise ValueError(f"Item {item_id} not found")
+    
+    return json.dumps(item)
+```
+
+## Caching Resources
+
+Implement caching for expensive resources:
+
+```python
+from functools import lru_cache
+import json
+
+@lru_cache(maxsize=100)
+def _get_expensive_data(key: str) -> dict:
+    """Cached data fetching"""
+    # Expensive operation
+    return fetch_from_external_api(key)
+
+@server.resource(
+    uri="cache://data/{key}",
+    name="cached_data",
+    description="Get cached data by key"
+)
+async def get_cached_data(key: str) -> str:
+    """Get cached data"""
+    data = _get_expensive_data(key)
+    return json.dumps(data)
+```
+
+## Accessing Resources from Clients
+
+Clients can read resources using the MCP protocol:
+
+```python client.py
+import asyncio
+from mcp_use import MCPClient
+
+async def read_resource():
+    config = {
+        "mcpServers": {
+            "local": {"url": "http://localhost:8000/mcp"}
+        }
+    }
+    
+    client = MCPClient(config=config)
+    await client.create_all_sessions()
+    
+    session = client.get_session("local")
+    
+    # List available resources
+    resources = await session.list_resources()
+    print("Available resources:", [r.name for r in resources])
+    
+    # Read a specific resource
+    result = await session.read_resource("data://config")
+    print("Resource content:", result.contents[0].text)
+    
+    await client.close_all_sessions()
+
+asyncio.run(read_resource())
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Meaningful URIs">
+    Choose clear, hierarchical URI schemes:
+    - ✅ `data://users`, `file:///logs/app.log`, `api://weather/{city}`
+    - ❌ `resource1`, `data`, `thing`
+  </Accordion>
+
+  <Accordion title="Set Appropriate MIME Types">
+    Always specify the correct MIME type for content:
+    ```python
+    mime_type="application/json"  # For JSON data
+    mime_type="text/plain"        # For plain text
+    ```
+  </Accordion>
+
+  <Accordion title="Validate Parameters">
+    Validate template parameters to prevent injection attacks:
+    ```python
+    if ".." in file_path or not file_path.startswith("/safe/dir"):
+        raise ValueError("Invalid file path")
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Errors">
+    Return clear error messages when resources aren't found:
+    ```python
+    if not item:
+        raise ValueError(f"Item {item_id} not found")
+    ```
+  </Accordion>
+
+  <Accordion title="Use Async for I/O">
+    Always use async for I/O operations:
+    ```python
+    async def read_file(path: str) -> str:
+        async with aiofiles.open(path) as f:
+            return await f.read()
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prompts" icon="message" href="/python/server/prompts">
+    Create reusable prompt templates
+  </Card>
+  <Card title="Transport" icon="network-wired" href="/python/server/transport">
+    Configure transport protocols
+  </Card>
+</CardGroup>
