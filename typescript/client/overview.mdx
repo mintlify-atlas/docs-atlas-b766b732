@@ -27,11 +27,11 @@ MCPClient (Node.js)          BaseMCPClient (Cross-platform)
          │      ├── Resource Access
          │      └── Notification Handling
          │
-         └── Connectors (transport layer)
-                │
-                ├── StdioConnector (process-based)
-                ├── HttpConnector (HTTP + SSE fallback)
-                └── WebSocketConnector (coming soon)
+          └── Connectors (transport layer)
+                 │
+                 ├── StdioConnector (process-based)
+                 ├── HttpConnector (HTTP + SSE fallback)
+                 └── WebSocketConnector (browser)
 ```
 
 ### Class Hierarchy
@@ -52,7 +52,7 @@ MCPClient (Node.js)          BaseMCPClient (Cross-platform)
 - Browser-specific implementation
 - HTTP/WebSocket connectors only
 - Local storage for configurations
-- See [Browser Client docs](/typescript/client/browser)
+- See [Connecting Guide](/typescript/client/connecting) for browser usage
 
 ## Core Components
 
@@ -87,7 +87,7 @@ Transport layer implementations:
     HTTP transport with automatic SSE fallback. Best for remote servers.
   </Card>
   <Card title="WebSocketConnector" icon="bolt">
-    WebSocket transport for bidirectional streaming. Coming soon.
+    WebSocket transport for bidirectional streaming (browser-only).
   </Card>
 </CardGroup>
 

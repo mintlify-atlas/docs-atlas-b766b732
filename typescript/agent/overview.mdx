@@ -97,6 +97,27 @@ Use this when you need:
 - Shared client instances
 - Fine-grained control
 
+### Remote Agent Mode
+
+For cloud-based agent execution using Manufact Cloud:
+
+```typescript
+import { RemoteAgent } from 'mcp-use/agent';
+
+const agent = new RemoteAgent({
+  agentId: 'your-agent-id',
+  apiKey: process.env.MCP_USE_API_KEY,
+  baseUrl: 'https://cloud.mcp-use.com' // optional
+});
+
+const result = await agent.run('Your query here');
+```
+
+**Note:** RemoteAgent requires an API key from [cloud.mcp-use.com](https://cloud.mcp-use.com). It executes agents remotely, useful for:
+- Serverless deployments
+- Browser applications without local MCP servers
+- Managed infrastructure
+
 ## Agent Configuration
 
 ```typescript
